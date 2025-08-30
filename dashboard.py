@@ -114,9 +114,9 @@ if login():
 
     # --- Upload section ---
     st.write("---")
-    st.header("Upload new data to update a category sheet")
+    st.header("Upload new data to append to a category sheet")
 
-    upload_category = st.selectbox("Select Category Sheet to Update", sheet_names)
+    upload_category = st.selectbox("Select Category Sheet to Append Data", sheet_names)
 
     uploaded_file = st.file_uploader(
         f"Upload CSV or Excel file for '{upload_category}' sheet (must match template columns)",
@@ -126,7 +126,6 @@ if login():
     if uploaded_file is not None:
         try:
             if uploaded_file.name.endswith('.csv'):
-                # Read CSV with semicolon separator
                 new_data = pd.read_csv(uploaded_file, sep=';')
             else:
                 new_data = pd.read_excel(uploaded_file)
@@ -138,11 +137,10 @@ if login():
             if not all(col in new_data.columns for col in expected_columns):
                 st.error(f"Uploaded file is missing some required columns: {expected_columns}")
             else:
-                # Convert datetime columns to strings for JSON serialization
                 for col in new_data.select_dtypes(include=['datetime64', 'datetimetz']).columns:
                     new_data[col] = new_data[col].dt.strftime('%Y-%m-%d')
 
-                if st.button("Update Google Sheet with uploaded data"):
+                if st.button("Append uploaded data to Google Sheet"):
                     try:
                         scopes = ['https://www.googleapis.com/auth/spreadsheets']
                         creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
@@ -150,16 +148,26 @@ if login():
                         client = gspread.authorize(creds)
 
                         sheet = client.open_by_key(spreadsheet_id).worksheet(upload_category)
+
+                        existing_data = sheet.get_all_values()
+
+                        if len(existing_data) == 0:
+                            combined_data = [new_data.columns.values.tolist()] + new_data.values.tolist()
+                        else:
+                            existing_rows = existing_data[1:]
+                            existing_df = pd.DataFrame(existing_rows, columns=existing_data[0])
+                            combined_df = pd.concat([existing_df, new_data], ignore_index=True)
+                            combined_data = [combined_df.columns.values.tolist()] + combined_df.values.tolist()
+
                         sheet.clear()
-                        sheet.update([new_data.columns.values.tolist()] + new_data.values.tolist())
+                        sheet.update(combined_data)
 
-                        st.success(f"Google Sheet '{upload_category}' updated successfully!")
+                        st.success(f"Data appended successfully to '{upload_category}' sheet!")
 
-                        # Clear cache so new data is reloaded on next run
                         load_data_from_gsheets.clear()
 
                     except Exception as e:
-                        st.error(f"Failed to update sheet: {e}")
+                        st.error(f"Failed to append data: {e}")
 
         except Exception as e:
             st.error(f"Failed to read uploaded file: {e}")
