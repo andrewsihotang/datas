@@ -10,7 +10,7 @@ def load_data_from_gsheets(json_keyfile_str, spreadsheet_name, sheet_name):
     creds_dict = json.loads(json_keyfile_str)
     creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
     client = gspread.authorize(creds)
-    sheet = client.open(spreadsheet_id).worksheet(sheet_name)
+    sheet = client.open_by_key(spreadsheet_id).worksheet(sheet_name)
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
     df.columns = df.columns.str.strip()
@@ -93,6 +93,7 @@ st.write('Number of unique participants:', filtered_df['NAMA_PESERTA'].nunique()
 st.write('Number of total participants:', filtered_df['NAMA_PESERTA'].count())
 st.write('Number of schools:', filtered_df['ASAL_SEKOLAH'].nunique())
 st.write('Number of Training Types (PELATIHAN):', filtered_df['PELATIHAN'].nunique())
+
 
 
 
