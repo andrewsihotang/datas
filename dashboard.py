@@ -40,7 +40,7 @@ if login():
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
     spreadsheet_id = '1_YeSK2zgoExnC8n6tlmoJFQDVEWZbncdBLx8S5k-ljc'
 
-    # Load data from all three sheets
+    # Load data from sheets
     sheet_names = ['Tendik', 'Pendidik', 'Kejuruan']
     dfs = []
     for sheet_name in sheet_names:
@@ -113,7 +113,6 @@ if login():
     st.write('Number of Training Types (NAMA_PELATIHAN):', filtered_df['NAMA_PELATIHAN'].nunique())
 
     # --- Upload section ---
-
     st.write("---")
     st.header("Upload new data to update a category sheet")
 
@@ -136,10 +135,13 @@ if login():
             st.dataframe(new_data)
 
             expected_columns = df.columns.drop('CATEGORY').tolist()
-
             if not all(col in new_data.columns for col in expected_columns):
                 st.error(f"Uploaded file is missing some required columns: {expected_columns}")
             else:
+                # Convert datetime columns to strings for JSON serialization
+                for col in new_data.select_dtypes(include=['datetime64', 'datetimetz']).columns:
+                    new_data[col] = new_data[col].dt.strftime('%Y-%m-%d')
+
                 if st.button("Update Google Sheet with uploaded data"):
                     try:
                         scopes = ['https://www.googleapis.com/auth/spreadsheets']
