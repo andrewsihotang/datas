@@ -10,13 +10,13 @@ def login():
 
     if not st.session_state.logged_in:
         st.title("Please log in")
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        username = st.text_input("Username", key="username")
+        password = st.text_input("Password", type="password", key="password")
         if st.button("Login"):
             if (username == st.secrets["LOGIN_USERNAME"] and
                 password == st.secrets["LOGIN_PASSWORD"]):
                 st.session_state.logged_in = True
-                st.experimental_rerun()
+                st.experimental_rerun()  # works if Streamlit version supports it; else remove this line
             else:
                 st.error("Invalid username or password")
         return False
@@ -34,6 +34,9 @@ if login():
         df = pd.DataFrame(data)
         df.columns = df.columns.str.strip()
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
+        # Fix for NPSN column type issue
+        if 'NPSN' in df.columns:
+            df['NPSN'] = df['NPSN'].astype(str)
         return df
 
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
