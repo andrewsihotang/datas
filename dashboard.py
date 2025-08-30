@@ -16,7 +16,6 @@ def login():
             if (username == st.secrets["LOGIN_USERNAME"] and
                 password == st.secrets["LOGIN_PASSWORD"]):
                 st.session_state.logged_in = True
-                # No st.experimental_rerun() needed; Streamlit auto-reruns
             else:
                 st.error("Invalid username or password")
         return False
@@ -126,24 +125,23 @@ if login():
     )
 
     if uploaded_file is not None:
-        # Read uploaded file
         try:
             if uploaded_file.name.endswith('.csv'):
-                new_data = pd.read_csv(uploaded_file)
+                # Read CSV with semicolon separator
+                new_data = pd.read_csv(uploaded_file, sep=';')
             else:
                 new_data = pd.read_excel(uploaded_file)
 
             st.write("Preview of uploaded data:")
             st.dataframe(new_data)
 
-            # You can validate columns here if needed
             expected_columns = df.columns.drop('CATEGORY').tolist()
+
             if not all(col in new_data.columns for col in expected_columns):
                 st.error(f"Uploaded file is missing some required columns: {expected_columns}")
             else:
                 if st.button("Update Google Sheet with uploaded data"):
                     try:
-                        # Use full spreadsheet access scope for update
                         scopes = ['https://www.googleapis.com/auth/spreadsheets']
                         creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
                         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
@@ -151,13 +149,11 @@ if login():
 
                         sheet = client.open_by_key(spreadsheet_id).worksheet(upload_category)
                         sheet.clear()
-
-                        # Update sheet, including headers
                         sheet.update([new_data.columns.values.tolist()] + new_data.values.tolist())
 
                         st.success(f"Google Sheet '{upload_category}' updated successfully!")
 
-                        # Optional: refresh cached data
+                        # Clear cache so new data is reloaded on next run
                         load_data_from_gsheets.clear()
 
                     except Exception as e:
