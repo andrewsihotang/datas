@@ -16,7 +16,7 @@ def login():
             if (username == st.secrets["LOGIN_USERNAME"] and
                 password == st.secrets["LOGIN_PASSWORD"]):
                 st.session_state.logged_in = True
-                st.experimental_rerun()  # works if Streamlit version supports it; else remove this line
+                # Removed st.experimental_rerun() due to version issue
             else:
                 st.error("Invalid username or password")
         return False
