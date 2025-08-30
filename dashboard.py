@@ -16,7 +16,7 @@ def login():
             if (username == st.secrets["LOGIN_USERNAME"] and
                 password == st.secrets["LOGIN_PASSWORD"]):
                 st.session_state.logged_in = True
-                # Removed st.experimental_rerun() due to version issue
+                # No st.experimental_rerun(), relying on widget rerun
             else:
                 st.error("Invalid username or password")
         return False
@@ -34,15 +34,21 @@ if login():
         df = pd.DataFrame(data)
         df.columns = df.columns.str.strip()
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
-        # Fix for NPSN column type issue
         if 'NPSN' in df.columns:
             df['NPSN'] = df['NPSN'].astype(str)
         return df
 
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
     spreadsheet_id = '1_YeSK2zgoExnC8n6tlmoJFQDVEWZbncdBLx8S5k-ljc'
-    sheet_name = 'Sheet1'
-    df = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
+
+    # Load multiple sheets and combine with CATEGORY column
+    sheet_names = ['Tendik', 'Pendidik', 'Kejuruan']
+    dfs = []
+    for sheet_name in sheet_names:
+        df_sheet = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
+        df_sheet['CATEGORY'] = sheet_name
+        dfs.append(df_sheet)
+    df = pd.concat(dfs, ignore_index=True)
 
     st.title('Training Participants Dashboard')
 
@@ -54,9 +60,13 @@ if login():
         'Select District (KECAMATAN)',
         options=df['KECAMATAN'].unique()
     )
+    nama_pelatihan_filter = st.multiselect(
+        'Select Training Name (NAMA_PELATIHAN)',
+        options=df['NAMA_PELATIHAN'].unique()
+    )
     pelatihan_filter = st.multiselect(
-        'Select Training Type (PELATIHAN)',
-        options=df['PELATIHAN'].unique()
+        'Select Job Category (CATEGORY)',
+        options=df['CATEGORY'].unique()
     )
     date_range = st.date_input(
         'Select Training Date Range (Optional)',
@@ -69,15 +79,18 @@ if login():
         conditions.append(df['JENJANG'].isin(jenjang_filter))
     if kecamatan_filter:
         conditions.append(df['KECAMATAN'].isin(kecamatan_filter))
+    if nama_pelatihan_filter:
+        conditions.append(df['NAMA_PELATIHAN'].isin(nama_pelatihan_filter))
     if pelatihan_filter:
-        conditions.append(df['PELATIHAN'].isin(pelatihan_filter))
+        conditions.append(df['CATEGORY'].isin(pelatihan_filter))
     if len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
+
     if conditions:
         filter_condition = conditions[0]
         for cond in conditions[1:]:
-            filter_condition |= cond
+            filter_condition &= cond
     else:
         filter_condition = pd.Series([True] * len(df))
 
@@ -98,4 +111,4 @@ if login():
     st.write('Number of unique participants:', filtered_df['NAMA_PESERTA'].nunique())
     st.write('Number of total participants:', filtered_df['NAMA_PESERTA'].count())
     st.write('Number of schools:', filtered_df['ASAL_SEKOLAH'].nunique())
-    st.write('Number of Training Types (PELATIHAN):', filtered_df['PELATIHAN'].nunique())
+    st.write('Number of Training Types (NAMA_PELATIHAN):', filtered_df['NAMA_PELATIHAN'].nunique())
