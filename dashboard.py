@@ -93,3 +93,4 @@ st.write('Number of unique participants:', filtered_df['NAMA_PESERTA'].nunique()
 st.write('Number of total participants:', filtered_df['NAMA_PESERTA'].count())
 st.write('Number of schools:', filtered_df['ASAL_SEKOLAH'].nunique())
 st.write('Number of Training Types (PELATIHAN):', filtered_df['PELATIHAN'].nunique())
+
