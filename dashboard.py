@@ -24,7 +24,7 @@ json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
 spreadsheet_id = '1_YeSK2zgoExnC8n6tlmoJFQDVEWZbncdBLx8S5k-ljc'
 sheet_name = 'Sheet1'
 
-df = load_data_from_gsheets(json_keyfile_str, spreadsheet_name, sheet_name)
+df = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
 
 st.title('Training Participants Dashboard')
 
@@ -93,5 +93,6 @@ st.write('Number of unique participants:', filtered_df['NAMA_PESERTA'].nunique()
 st.write('Number of total participants:', filtered_df['NAMA_PESERTA'].count())
 st.write('Number of schools:', filtered_df['ASAL_SEKOLAH'].nunique())
 st.write('Number of Training Types (PELATIHAN):', filtered_df['PELATIHAN'].nunique())
+
 
 
