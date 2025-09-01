@@ -4,20 +4,20 @@ import gspread
 import json
 from google.oauth2.service_account import Credentials
 
-# --- Aggressive CSS to minimize margins ---
+# --- CSS with small left and right margin (20px) ---
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main {
     max-width: 100vw;
-    padding-left: 0px;
-    padding-right: 0px;
+    padding-left: 20px;
+    padding-right: 20px;
 }
 .block-container {
     max-width: 100vw;
     padding-top: 2rem;
     padding-bottom: 2rem;
-    padding-left: 0px;
-    padding-right: 0px;
+    padding-left: 20px;
+    padding-right: 20px;
 }
 .stDataFrameContainer, .css-1q8dd3e.e1fqkh3o4 {
     max-width: 100vw !important;
@@ -69,7 +69,6 @@ if login():
     dfs = []
     for sheet_name in sheet_names:
         df_sheet = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
-        # Skip adding CATEGORY column as requested
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
 
@@ -77,7 +76,7 @@ if login():
 
     st.write('<div class="filter-title">Filter Data</div>', unsafe_allow_html=True)
     with st.container():
-        col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
+        col1, col2, col3, col4, col5 = st.columns([1,1,1,1,1])
         with col1:
             jenjang_filter = st.multiselect('JENJANG', df['JENJANG'].unique())
         with col2:
@@ -89,7 +88,6 @@ if login():
         with col5:
             date_range = st.date_input('Tanggal', value=[])
 
-    # --- Table and summary below filters ---
     conditions = []
     if jenjang_filter:
         conditions.append(df['JENJANG'].isin(jenjang_filter))
@@ -111,8 +109,10 @@ if login():
         filter_condition = pd.Series([True] * len(df))
 
     filtered_df = df[filter_condition]
+
     if 'NO' in filtered_df.columns:
         filtered_df = filtered_df.drop(columns=['NO'])
+
     filtered_df = filtered_df.reset_index(drop=True)
     filtered_df.index = filtered_df.index + 1
     filtered_df['TANGGAL'] = filtered_df['TANGGAL'].dt.strftime('%Y-%m-%d')
