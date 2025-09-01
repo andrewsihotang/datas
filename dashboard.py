@@ -4,7 +4,7 @@ import gspread
 import json
 from google.oauth2.service_account import Credentials
 
-# --- CSS with small margins ---
+# --- CSS for margins ---
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main {
@@ -74,7 +74,6 @@ if login():
 
     st.title('Data Peserta Pelatihan Tenaga Kependidikan')
 
-    # Removed the "Filter Data" heading as requested
     with st.container():
         col1, col2, col3, col4, col5 = st.columns([1,1,1,1,1])
         with col1:
@@ -120,9 +119,68 @@ if login():
     st.write(f'Showing {filtered_df.shape[0]} records')
     st.dataframe(filtered_df, use_container_width=True)
 
-    # Changed heading and metric labels to Indonesian as requested
     st.write('### Kesimpulan')
     st.write('Jumlah Peserta (unique):', filtered_df['NAMA_PESERTA'].nunique())
     st.write('Jumlah Total Peserta Keseluruhan:', filtered_df['NAMA_PESERTA'].count())
     st.write('Jumlah Sekolah:', filtered_df['ASAL_SEKOLAH'].nunique())
     st.write('Jumlah Pelatiahan:', filtered_df['NAMA_PELATIHAN'].nunique())
+
+    # --- Upload section ---
+    st.write("---")
+    st.header("Upload data untuk menambahkan ke sheet kategori")
+
+    upload_category = st.selectbox("Pilih kategori sheet untuk ditambahkan data", sheet_names)
+
+    uploaded_file = st.file_uploader(
+        f"Upload file CSV atau Excel untuk sheet '{upload_category}' (format sesuai template)",
+        type=['csv', 'xlsx']
+    )
+
+    if uploaded_file is not None:
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                new_data = pd.read_csv(uploaded_file, sep=';')
+            else:
+                new_data = pd.read_excel(uploaded_file)
+
+            st.write("Pratinjau data yang diunggah:")
+            st.dataframe(new_data)
+
+            expected_columns = df.columns.drop('CATEGORY', errors='ignore').tolist()
+            if not all(col in new_data.columns for col in expected_columns):
+                st.error(f"File unggahan kehilangan beberapa kolom wajib: {expected_columns}")
+            else:
+                for col in new_data.select_dtypes(include=['datetime64', 'datetimetz']).columns:
+                    new_data[col] = new_data[col].dt.strftime('%Y-%m-%d')
+
+                if st.button("Tambahkan data ke Google Sheet"):
+                    try:
+                        scopes = ['https://www.googleapis.com/auth/spreadsheets']
+                        creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
+                        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+                        client = gspread.authorize(creds)
+
+                        sheet = client.open_by_key(spreadsheet_id).worksheet(upload_category)
+
+                        existing_data = sheet.get_all_values()
+
+                        if len(existing_data) == 0:
+                            combined_data = [new_data.columns.values.tolist()] + new_data.values.tolist()
+                        else:
+                            existing_rows = existing_data[1:]
+                            existing_df = pd.DataFrame(existing_rows, columns=existing_data[0])
+                            combined_df = pd.concat([existing_df, new_data], ignore_index=True)
+                            combined_data = [combined_df.columns.values.tolist()] + combined_df.values.tolist()
+
+                        sheet.clear()
+                        sheet.update(combined_data)
+
+                        st.success(f"Data berhasil ditambahkan ke sheet '{upload_category}'!")
+
+                        load_data_from_gsheets.clear()
+
+                    except Exception as e:
+                        st.error(f"Gagal menambahkan data: {e}")
+
+        except Exception as e:
+            st.error(f"Gagal membaca file unggahan: {e}")
