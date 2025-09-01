@@ -4,23 +4,27 @@ import gspread
 import json
 from google.oauth2.service_account import Credentials
 
-# ---- Custom CSS for wider content area and tidier spacing ----
+# --- Aggressive CSS to minimize margins ---
 st.markdown("""
 <style>
-/* widen page */
-.main {
-    max-width: 98vw;
-    padding-left: 10px;
-    padding-right: 10px;
+[data-testid="stAppViewContainer"] > .main {
+    max-width: 100vw;
+    padding-left: 0px;
+    padding-right: 0px;
 }
-/* tidy filter section */
-.filter-title {
-    margin-bottom: 0px;
-    font-size: 1.1rem;
-    font-weight: 600;
+.block-container {
+    max-width: 100vw;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    padding-left: 0px;
+    padding-right: 0px;
 }
-/* reduce vertical space under filters */
-[data-testid="stForm"] + div { margin-top: 10px; }
+.stDataFrameContainer, .css-1q8dd3e.e1fqkh3o4 {
+    max-width: 100vw !important;
+}
+[data-testid="stSidebar"] {
+    display: none;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -65,11 +69,12 @@ if login():
     dfs = []
     for sheet_name in sheet_names:
         df_sheet = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
-        df_sheet['CATEGORY'] = sheet_name
+        # Skip adding CATEGORY column as requested
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
 
-    # --- Filters at top, in columns, tidier and more compact ---
+    st.title('Training Participants Dashboard')
+
     st.write('<div class="filter-title">Filter Data</div>', unsafe_allow_html=True)
     with st.container():
         col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
@@ -78,9 +83,9 @@ if login():
         with col2:
             kecamatan_filter = st.multiselect('KECAMATAN', df['KECAMATAN'].unique())
         with col3:
-            nama_pelatihan_filter = st.multiselect('NAMA_PELATIHAN', df['NAMA_PELATIHAN'].unique())
+            nama_pelatihan_filter = st.multiselect('NAMA PELATIHAN', df['NAMA_PELATIHAN'].unique())
         with col4:
-            pelatihan_filter = st.multiselect('CATEGORY', df['CATEGORY'].unique())
+            pelatihan_filter = st.multiselect('PELATIHAN', df['PELATIHAN'].unique())
         with col5:
             date_range = st.date_input('Tanggal', value=[])
 
@@ -93,7 +98,7 @@ if login():
     if nama_pelatihan_filter:
         conditions.append(df['NAMA_PELATIHAN'].isin(nama_pelatihan_filter))
     if pelatihan_filter:
-        conditions.append(df['CATEGORY'].isin(pelatihan_filter))
+        conditions.append(df['PELATIHAN'].isin(pelatihan_filter))
     if len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
