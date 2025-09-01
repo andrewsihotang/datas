@@ -4,12 +4,33 @@ import gspread
 import json
 from google.oauth2.service_account import Credentials
 
+# ---- Custom CSS for wider content area and tidier spacing ----
+st.markdown("""
+<style>
+/* widen page */
+.main {
+    max-width: 98vw;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+/* tidy filter section */
+.filter-title {
+    margin-bottom: 0px;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+/* reduce vertical space under filters */
+[data-testid="stForm"] + div { margin-top: 10px; }
+</style>
+""", unsafe_allow_html=True)
+
 def login():
     if "logged_in" not in st.session_state:
         st.session_state.logged_in = False
 
     if not st.session_state.logged_in:
-        st.title("Please log in")
+        st.title("Training Participants Dashboard")
+        st.subheader("Login Required")
         username = st.text_input("Username", key="username")
         password = st.text_input("Password", type="password", key="password")
         if st.button("Login"):
@@ -48,22 +69,20 @@ if login():
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
 
-    st.title('Training Participants Dashboard')
-
-    # --- Filters at the top in columns ---
-    st.write("## Filter Data")
+    # --- Filters at top, in columns, tidier and more compact ---
+    st.write('<div class="filter-title">Filter Data</div>', unsafe_allow_html=True)
     with st.container():
         col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
         with col1:
-            jenjang_filter = st.multiselect('Education Level (JENJANG)', df['JENJANG'].unique())
+            jenjang_filter = st.multiselect('JENJANG', df['JENJANG'].unique())
         with col2:
-            kecamatan_filter = st.multiselect('District (KECAMATAN)', df['KECAMATAN'].unique())
+            kecamatan_filter = st.multiselect('KECAMATAN', df['KECAMATAN'].unique())
         with col3:
-            nama_pelatihan_filter = st.multiselect('Training Name (NAMA_PELATIHAN)', df['NAMA_PELATIHAN'].unique())
+            nama_pelatihan_filter = st.multiselect('NAMA_PELATIHAN', df['NAMA_PELATIHAN'].unique())
         with col4:
-            pelatihan_filter = st.multiselect('Job Category (CATEGORY)', df['CATEGORY'].unique())
+            pelatihan_filter = st.multiselect('CATEGORY', df['CATEGORY'].unique())
         with col5:
-            date_range = st.date_input('Training Date Range (Optional)', value=[])
+            date_range = st.date_input('Tanggal', value=[])
 
     # --- Table and summary below filters ---
     conditions = []
@@ -87,17 +106,14 @@ if login():
         filter_condition = pd.Series([True] * len(df))
 
     filtered_df = df[filter_condition]
-
     if 'NO' in filtered_df.columns:
         filtered_df = filtered_df.drop(columns=['NO'])
-
     filtered_df = filtered_df.reset_index(drop=True)
     filtered_df.index = filtered_df.index + 1
-
     filtered_df['TANGGAL'] = filtered_df['TANGGAL'].dt.strftime('%Y-%m-%d')
 
     st.write(f'Showing {filtered_df.shape[0]} records')
-    st.dataframe(filtered_df)
+    st.dataframe(filtered_df, use_container_width=True)
 
     st.write('### Summary Metrics')
     st.write('Number of unique participants:', filtered_df['NAMA_PESERTA'].nunique())
