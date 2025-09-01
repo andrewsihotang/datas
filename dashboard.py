@@ -40,7 +40,6 @@ if login():
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
     spreadsheet_id = '1_YeSK2zgoExnC8n6tlmoJFQDVEWZbncdBLx8S5k-ljc'
 
-    # Load data from sheets
     sheet_names = ['Tendik', 'Pendidik', 'Kejuruan']
     dfs = []
     for sheet_name in sheet_names:
@@ -51,28 +50,22 @@ if login():
 
     st.title('Training Participants Dashboard')
 
-    jenjang_filter = st.multiselect(
-        'Select Education Level (JENJANG)',
-        options=df['JENJANG'].unique()
-    )
-    kecamatan_filter = st.multiselect(
-        'Select District (KECAMATAN)',
-        options=df['KECAMATAN'].unique()
-    )
-    nama_pelatihan_filter = st.multiselect(
-        'Select Training Name (NAMA_PELATIHAN)',
-        options=df['NAMA_PELATIHAN'].unique()
-    )
-    pelatihan_filter = st.multiselect(
-        'Select Job Category (CATEGORY)',
-        options=df['CATEGORY'].unique()
-    )
-    date_range = st.date_input(
-        'Select Training Date Range (Optional)',
-        value=[],
-        help="Leave empty to disable date filtering"
-    )
+    # --- Filters at the top in columns ---
+    st.write("## Filter Data")
+    with st.container():
+        col1, col2, col3, col4, col5 = st.columns([1, 1, 1, 1, 1])
+        with col1:
+            jenjang_filter = st.multiselect('Education Level (JENJANG)', df['JENJANG'].unique())
+        with col2:
+            kecamatan_filter = st.multiselect('District (KECAMATAN)', df['KECAMATAN'].unique())
+        with col3:
+            nama_pelatihan_filter = st.multiselect('Training Name (NAMA_PELATIHAN)', df['NAMA_PELATIHAN'].unique())
+        with col4:
+            pelatihan_filter = st.multiselect('Job Category (CATEGORY)', df['CATEGORY'].unique())
+        with col5:
+            date_range = st.date_input('Training Date Range (Optional)', value=[])
 
+    # --- Table and summary below filters ---
     conditions = []
     if jenjang_filter:
         conditions.append(df['JENJANG'].isin(jenjang_filter))
@@ -111,63 +104,3 @@ if login():
     st.write('Number of total participants:', filtered_df['NAMA_PESERTA'].count())
     st.write('Number of schools:', filtered_df['ASAL_SEKOLAH'].nunique())
     st.write('Number of Training Types (NAMA_PELATIHAN):', filtered_df['NAMA_PELATIHAN'].nunique())
-
-    # --- Upload section ---
-    st.write("---")
-    st.header("Upload new data to append to a category sheet")
-
-    upload_category = st.selectbox("Select Category Sheet to Append Data", sheet_names)
-
-    uploaded_file = st.file_uploader(
-        f"Upload CSV or Excel file for '{upload_category}' sheet (must match template columns)",
-        type=['csv', 'xlsx']
-    )
-
-    if uploaded_file is not None:
-        try:
-            if uploaded_file.name.endswith('.csv'):
-                new_data = pd.read_csv(uploaded_file, sep=';')
-            else:
-                new_data = pd.read_excel(uploaded_file)
-
-            st.write("Preview of uploaded data:")
-            st.dataframe(new_data)
-
-            expected_columns = df.columns.drop('CATEGORY').tolist()
-            if not all(col in new_data.columns for col in expected_columns):
-                st.error(f"Uploaded file is missing some required columns: {expected_columns}")
-            else:
-                for col in new_data.select_dtypes(include=['datetime64', 'datetimetz']).columns:
-                    new_data[col] = new_data[col].dt.strftime('%Y-%m-%d')
-
-                if st.button("Append uploaded data to Google Sheet"):
-                    try:
-                        scopes = ['https://www.googleapis.com/auth/spreadsheets']
-                        creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
-                        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-                        client = gspread.authorize(creds)
-
-                        sheet = client.open_by_key(spreadsheet_id).worksheet(upload_category)
-
-                        existing_data = sheet.get_all_values()
-
-                        if len(existing_data) == 0:
-                            combined_data = [new_data.columns.values.tolist()] + new_data.values.tolist()
-                        else:
-                            existing_rows = existing_data[1:]
-                            existing_df = pd.DataFrame(existing_rows, columns=existing_data[0])
-                            combined_df = pd.concat([existing_df, new_data], ignore_index=True)
-                            combined_data = [combined_df.columns.values.tolist()] + combined_df.values.tolist()
-
-                        sheet.clear()
-                        sheet.update(combined_data)
-
-                        st.success(f"Data appended successfully to '{upload_category}' sheet!")
-
-                        load_data_from_gsheets.clear()
-
-                    except Exception as e:
-                        st.error(f"Failed to append data: {e}")
-
-        except Exception as e:
-            st.error(f"Failed to read uploaded file: {e}")
