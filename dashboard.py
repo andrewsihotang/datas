@@ -4,7 +4,7 @@ import gspread
 import json
 from google.oauth2.service_account import Credentials
 
-# --- CSS with small left and right margin (20px) ---
+# --- CSS with small margins ---
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main {
@@ -33,7 +33,7 @@ def login():
         st.session_state.logged_in = False
 
     if not st.session_state.logged_in:
-        st.title("Training Participants Dashboard")
+        st.title("Data Peserta Pelatihan Tenaga Kependidikan")
         st.subheader("Login Required")
         username = st.text_input("Username", key="username")
         password = st.text_input("Password", type="password", key="password")
@@ -72,9 +72,9 @@ if login():
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
 
-    st.title('Training Participants Dashboard')
+    st.title('Data Peserta Pelatihan Tenaga Kependidikan')
 
-    st.write('<div class="filter-title">Filter Data</div>', unsafe_allow_html=True)
+    # Removed the "Filter Data" heading as requested
     with st.container():
         col1, col2, col3, col4, col5 = st.columns([1,1,1,1,1])
         with col1:
@@ -86,7 +86,7 @@ if login():
         with col4:
             pelatihan_filter = st.multiselect('PELATIHAN', df['PELATIHAN'].unique())
         with col5:
-            date_range = st.date_input('Tanggal', value=[])
+            date_range = st.date_input('TANGGAL', value=[])
 
     conditions = []
     if jenjang_filter:
@@ -120,8 +120,9 @@ if login():
     st.write(f'Showing {filtered_df.shape[0]} records')
     st.dataframe(filtered_df, use_container_width=True)
 
-    st.write('### Summary Metrics')
-    st.write('Number of unique participants:', filtered_df['NAMA_PESERTA'].nunique())
-    st.write('Number of total participants:', filtered_df['NAMA_PESERTA'].count())
-    st.write('Number of schools:', filtered_df['ASAL_SEKOLAH'].nunique())
-    st.write('Number of Training Types (NAMA_PELATIHAN):', filtered_df['NAMA_PELATIHAN'].nunique())
+    # Changed heading and metric labels to Indonesian as requested
+    st.write('### Kesimpulan')
+    st.write('Jumlah Peserta (unique):', filtered_df['NAMA_PESERTA'].nunique())
+    st.write('Jumlah Total Peserta Keseluruhan:', filtered_df['NAMA_PESERTA'].count())
+    st.write('Jumlah Sekolah:', filtered_df['ASAL_SEKOLAH'].nunique())
+    st.write('Jumlah Pelatiahan:', filtered_df['NAMA_PELATIHAN'].nunique())
