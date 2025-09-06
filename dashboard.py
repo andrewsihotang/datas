@@ -47,10 +47,13 @@ def login():
     return True
 
 if login():
-    # Add refresh button to manually reload latest data from Google Sheets
+    # Add vertical space before refresh button to avoid cropping
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    
+    # Refresh button to clear cache and reload fresh data
     if st.button("Refresh Data"):
         st.cache_data.clear()
-        st.experimental_rerun()
+        st.rerun()
 
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
@@ -65,7 +68,7 @@ if login():
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
         if 'NPSN' in df.columns:
             df['NPSN'] = df['NPSN'].astype(str)
-        if 'STASUS_SEKOLAH' in df.columns:  # Fix typo if exists
+        if 'STASUS_SEKOLAH' in df.columns:  # Fix typo if present
             df.rename(columns={'STASUS_SEKOLAH': 'STATUS_SEKOLAH'}, inplace=True)
         if 'STATUS_SEKOLAH' not in df.columns:
             df['STATUS_SEKOLAH'] = pd.NA
@@ -130,7 +133,7 @@ if login():
     filtered_df.index = filtered_df.index + 1
     filtered_df['TANGGAL'] = filtered_df['TANGGAL'].dt.strftime('%Y-%m-%d')
 
-    # Reorder columns to place STATUS_SEKOLAH right after ASAL_SEKOLAH
+    # Reorder columns so STATUS_SEKOLAH is right after ASAL_SEKOLAH
     cols = list(filtered_df.columns)
     if 'STATUS_SEKOLAH' in cols and 'ASAL_SEKOLAH' in cols:
         cols.remove('STATUS_SEKOLAH')
