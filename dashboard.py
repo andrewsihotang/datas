@@ -60,6 +60,9 @@ if login():
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
         if 'NPSN' in df.columns:
             df['NPSN'] = df['NPSN'].astype(str)
+        # Ensure STATUS_SEKOLAH exists in dataframe to avoid errors if missing
+        if 'STATUS_SEKOLAH' not in df.columns:
+            df['STATUS_SEKOLAH'] = pd.NA
         return df
 
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
@@ -75,7 +78,7 @@ if login():
     st.title('Data Peserta Pelatihan Tenaga Kependidikan')
 
     with st.container():
-        col1, col2, col3, col4, col5 = st.columns([1,1,1,1,1])
+        col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
         with col1:
             jenjang_filter = st.multiselect('JENJANG', df['JENJANG'].unique())
         with col2:
@@ -85,6 +88,10 @@ if login():
         with col4:
             pelatihan_filter = st.multiselect('PELATIHAN', df['PELATIHAN'].unique())
         with col5:
+            # Check if STATUS_SEKOLAH column has only NA or empty; handle safely
+            status_options = df['STATUS_SEKOLAH'].dropna().unique() if 'STATUS_SEKOLAH' in df.columns else []
+            status_sekolah_filter = st.multiselect('STATUS_SEKOLAH', status_options)
+        with col6:
             date_range = st.date_input('TANGGAL', value=[])
 
     conditions = []
@@ -96,6 +103,8 @@ if login():
         conditions.append(df['NAMA_PELATIHAN'].isin(nama_pelatihan_filter))
     if pelatihan_filter:
         conditions.append(df['PELATIHAN'].isin(pelatihan_filter))
+    if status_sekolah_filter:
+        conditions.append(df['STATUS_SEKOLAH'].isin(status_sekolah_filter))
     if len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
