@@ -60,7 +60,7 @@ if login():
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
         if 'NPSN' in df.columns:
             df['NPSN'] = df['NPSN'].astype(str)
-        if 'STASUS_SEKOLAH' in df.columns:  # Fix common typo
+        if 'STASUS_SEKOLAH' in df.columns:  # Fix typo if exists
             df.rename(columns={'STASUS_SEKOLAH': 'STATUS_SEKOLAH'}, inplace=True)
         if 'STATUS_SEKOLAH' not in df.columns:
             df['STATUS_SEKOLAH'] = pd.NA
@@ -90,7 +90,7 @@ if login():
             pelatihan_filter = st.multiselect('PELATIHAN', df['PELATIHAN'].unique())
         with col5:
             status_options = df['STATUS_SEKOLAH'].dropna().unique() if 'STATUS_SEKOLAH' in df.columns else []
-            status_sekolah_filter = st.multiselect('STATUS_SEKOLAH', status_options)
+            status_sekolah_filter = st.multiselect('STATUS SEKOLAH', status_options)
         with col6:
             date_range = st.date_input('TANGGAL', value=[])
 
@@ -125,8 +125,15 @@ if login():
     filtered_df.index = filtered_df.index + 1
     filtered_df['TANGGAL'] = filtered_df['TANGGAL'].dt.strftime('%Y-%m-%d')
 
-    # Drop STATUS_SEKOLAH when displaying
-    display_df = filtered_df.drop(columns=['STATUS_SEKOLAH'], errors='ignore')
+    # Reorder columns to place STATUS_SEKOLAH right after ASAL_SEKOLAH
+    cols = list(filtered_df.columns)
+    if 'STATUS_SEKOLAH' in cols and 'ASAL_SEKOLAH' in cols:
+        cols.remove('STATUS_SEKOLAH')
+        asal_idx = cols.index('ASAL_SEKOLAH')
+        cols.insert(asal_idx + 1, 'STATUS_SEKOLAH')
+        display_df = filtered_df[cols]
+    else:
+        display_df = filtered_df
 
     st.write(f'Showing {display_df.shape[0]} records')
     st.dataframe(display_df, use_container_width=True)
