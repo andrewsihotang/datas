@@ -47,6 +47,11 @@ def login():
     return True
 
 if login():
+    # Add refresh button to manually reload latest data from Google Sheets
+    if st.button("Refresh Data"):
+        st.cache_data.clear()
+        st.experimental_rerun()
+
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
         scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly']
