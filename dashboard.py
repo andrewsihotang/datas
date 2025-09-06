@@ -60,7 +60,8 @@ if login():
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
         if 'NPSN' in df.columns:
             df['NPSN'] = df['NPSN'].astype(str)
-        # Ensure STATUS_SEKOLAH exists in dataframe to avoid errors if missing
+        if 'STASUS_SEKOLAH' in df.columns:  # Fix common typo
+            df.rename(columns={'STASUS_SEKOLAH': 'STATUS_SEKOLAH'}, inplace=True)
         if 'STATUS_SEKOLAH' not in df.columns:
             df['STATUS_SEKOLAH'] = pd.NA
         return df
@@ -88,7 +89,6 @@ if login():
         with col4:
             pelatihan_filter = st.multiselect('PELATIHAN', df['PELATIHAN'].unique())
         with col5:
-            # Check if STATUS_SEKOLAH column has only NA or empty; handle safely
             status_options = df['STATUS_SEKOLAH'].dropna().unique() if 'STATUS_SEKOLAH' in df.columns else []
             status_sekolah_filter = st.multiselect('STATUS_SEKOLAH', status_options)
         with col6:
@@ -125,8 +125,11 @@ if login():
     filtered_df.index = filtered_df.index + 1
     filtered_df['TANGGAL'] = filtered_df['TANGGAL'].dt.strftime('%Y-%m-%d')
 
-    st.write(f'Showing {filtered_df.shape[0]} records')
-    st.dataframe(filtered_df, use_container_width=True)
+    # Drop STATUS_SEKOLAH when displaying
+    display_df = filtered_df.drop(columns=['STATUS_SEKOLAH'], errors='ignore')
+
+    st.write(f'Showing {display_df.shape[0]} records')
+    st.dataframe(display_df, use_container_width=True)
 
     st.write('### Kesimpulan')
     st.write('Jumlah Peserta (unique):', filtered_df['NAMA_PESERTA'].nunique())
