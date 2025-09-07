@@ -7,7 +7,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import plotly.graph_objects as go
 import plotly.express as px
 
-# --- CSS for margins ---
+# --- CSS for margins and font size tweak on mobile ---
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main {
@@ -27,6 +27,11 @@ st.markdown("""
 }
 [data-testid="stSidebar"] {
     display: none;
+}
+/* Smaller text in aggrid on small screens */
+@media (max-width: 600px) {
+    .ag-root-wrapper, .ag-theme-streamlit input { font-size:11px !important; }
+    .ag-header-cell-label, .ag-cell { font-size:10px !important; }
 }
 .center-plotly {display: flex; flex-direction: column; align-items: center; margin-bottom: 32px;}
 </style>
@@ -68,7 +73,7 @@ if login():
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
         if 'NPSN' in df.columns:
             df['NPSN'] = df['NPSN'].astype(str)
-        if 'STASUS_SEKOLAH' in df.columns:  # Fix typo if present
+        if 'STASUS_SEKOLAH' in df.columns:
             df.rename(columns={'STASUS_SEKOLAH': 'STATUS_SEKOLAH'}, inplace=True)
         if 'STATUS_SEKOLAH' not in df.columns:
             df['STATUS_SEKOLAH'] = pd.NA
@@ -115,12 +120,14 @@ if login():
     if len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
+
     if conditions:
         filter_condition = conditions[0]
         for cond in conditions[1:]:
             filter_condition &= cond
     else:
         filter_condition = pd.Series([True] * len(df))
+
     filtered_df = df[filter_condition]
 
     if 'NO' in filtered_df.columns:
@@ -140,22 +147,29 @@ if login():
 
     st.write(f'Showing {display_df.shape[0]} records')
 
-    # Interactive table with AgGrid
-    gb = GridOptionsBuilder.from_dataframe(display_df)
+    # Toggle: Full or Compact view
+    view_mode = st.radio("Table view mode:", ['Full Columns', 'Compact Columns'], horizontal=True)
+
+    if view_mode == 'Compact Columns':
+        compact_cols = ['NAMA_PESERTA', 'NAMA_PELATIHAN', 'TANGGAL']
+        display_df_view = display_df[compact_cols].copy()
+    else:
+        display_df_view = display_df.copy()
+
+    gb = GridOptionsBuilder.from_dataframe(display_df_view)
     gb.configure_pagination(enabled=True)
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     grid_options = gb.build()
 
     grid_response = AgGrid(
-        display_df,
+        display_df_view,
         gridOptions=grid_options,
         update_mode=GridUpdateMode.SELECTION_CHANGED,
         height=400,
         fit_columns_on_grid_load=True,
         reload_data=True,
     )
-
     selected = grid_response['selected_rows']
     if selected is not None and len(selected) > 0:
         if isinstance(selected, pd.DataFrame):
@@ -172,23 +186,15 @@ if login():
         st.dataframe(participant_trainings)
         st.write(f"Jumlah pelatihan: {participant_trainings.shape[0]}")
 
-    # Kesimpulan section
-    unique_participants = filtered_df['NAMA_PESERTA'].nunique()
-    total_participants = filtered_df['NAMA_PESERTA'].count()
-    unique_schools = filtered_df['ASAL_SEKOLAH'].nunique()
-    unique_trainings = filtered_df['NAMA_PELATIHAN'].nunique()
-
     st.write('### Kesimpulan')
-    st.write('Jumlah Peserta (unique):', unique_participants)
-    st.write('Jumlah Total Peserta Keseluruhan:', total_participants)
-    st.write('Jumlah Sekolah:', unique_schools)
-    st.write('Jumlah Pelatihan:', unique_trainings)
+    st.write('Jumlah Peserta (unique):', filtered_df['NAMA_PESERTA'].nunique())
+    st.write('Jumlah Total Peserta Keseluruhan:', filtered_df['NAMA_PESERTA'].count())
+    st.write('Jumlah Sekolah:', filtered_df['ASAL_SEKOLAH'].nunique())
+    st.write('Jumlah Pelatihan:', filtered_df['NAMA_PELATIHAN'].nunique())
 
-    # Yearly Participants Chart
     filtered_df['YEAR'] = pd.to_datetime(filtered_df['TANGGAL']).dt.year
     yearly_participants = filtered_df.groupby('YEAR')['NAMA_PESERTA'].nunique().reset_index()
 
-    # Target data for jenjang participant achievement
     targets = {
         'DIKMAS': 284,
         'PAUD': 2292,
@@ -198,7 +204,6 @@ if login():
         'SMK': 636,
     }
 
-    # Summary table for jenjang achievement
     summary_rows = []
     for jenjang, target in targets.items():
         df_jenjang = filtered_df[
@@ -218,14 +223,13 @@ if login():
         })
 
     df_summary = pd.DataFrame(summary_rows)
-    df_summary.index = df_summary.index + 1  # Start numbering at 1
+    df_summary.index = df_summary.index + 1
     df_summary = df_summary[['Jenjang', 'Target Jumlah Peserta Pelatihan',
                              'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
 
     st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang')
     st.dataframe(df_summary)
 
-    # Display charts vertically, titles centered
     st.markdown('<div class="center-plotly">', unsafe_allow_html=True)
     fig_yearly = go.Figure(data=[go.Bar(
         x=yearly_participants['YEAR'].astype(str),
@@ -235,7 +239,7 @@ if login():
         marker_color='#1f77b4'
     )])
     fig_yearly.update_layout(
-        title={'text':'Grafik Jumlah Perserta (unique)','x':0.5,'xanchor':'center'},
+        title={'text':'Grafik Jumlah Peserta (unique)', 'x':0.5, 'xanchor':'center'},
         xaxis_title='Tahun',
         yaxis_title='Jumlah',
         template='plotly_white',
@@ -248,10 +252,7 @@ if login():
     st.markdown('<div class="center-plotly">', unsafe_allow_html=True)
     pie_data = df_summary.copy()
     pie_data['UniqueValue'] = (
-        pie_data['Jumlah Peserta Pelatihan (unique)']
-        .str.replace(' Orang', '', regex=False)
-        .replace('', '0')
-        .astype(int)
+        pie_data['Jumlah Peserta Pelatihan (unique)'].str.replace(' Orang', '', regex=False).replace('', '0').astype(int)
     )
     fig_pie = px.pie(
         pie_data,
@@ -264,12 +265,11 @@ if login():
         showlegend=True,
         height=350,
         width=500,
-        title={'text':'Proporsi Jumlah Peserta (unique) per Jenjang','x':0.5,'xanchor':'center'}
+        title={'text':'Proporsi Jumlah Peserta (unique) per Jenjang', 'x':0.5, 'xanchor':'center'}
     )
     st.plotly_chart(fig_pie, use_container_width=False)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- Upload section ---
     st.write("---")
     st.header("Upload Data Terbaru")
     upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
@@ -315,7 +315,6 @@ if login():
         except Exception as e:
             st.error(f"Gagal membaca file unggahan: {e}")
 
-    # --- Social media footer ---
     st.markdown(
         """
         <hr>
@@ -336,4 +335,3 @@ if login():
         """,
         unsafe_allow_html=True,
     )
-
