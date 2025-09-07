@@ -3,3 +3,5 @@ pandas
 gspread
 openpyxl
 google-auth
+streamlit-aggrid
+plotly
