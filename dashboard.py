@@ -53,7 +53,7 @@ if login():
     st.markdown("<br><br>", unsafe_allow_html=True)
     if st.button("Refresh Data"):
         st.cache_data.clear()
-        st.experimental_rerun()
+        st.rerun()
 
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
@@ -336,3 +336,4 @@ if login():
         """,
         unsafe_allow_html=True,
     )
+
