@@ -6,7 +6,6 @@ from google.oauth2.service_account import Credentials
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import plotly.graph_objects as go
 import plotly.express as px
-import numpy as np
 
 # --- CSS for margins and font size tweak on mobile ---
 st.markdown("""
@@ -29,6 +28,7 @@ st.markdown("""
 [data-testid="stSidebar"] {
     display: none;
 }
+/* Smaller text in aggrid on small screens */
 @media (max-width: 700px) {
     .ag-root-wrapper, .ag-theme-streamlit input { font-size:11px !important; }
     .ag-header-cell-label, .ag-cell { font-size:10px !important; }
@@ -53,12 +53,15 @@ def login():
         return False
     return True
 
+# --- Filter reset logic ---
 def reset_filters(options_dict):
     for key, default in options_dict.items():
         st.session_state[key] = default
 
 if login():
     st.markdown("<br>", unsafe_allow_html=True)
+
+    # --- Button Row ---
     colbtn1, colbtn2, _ = st.columns([1, 1, 8])
     with colbtn1:
         if st.button("Refresh Data"):
@@ -66,6 +69,7 @@ if login():
             st.rerun()
     with colbtn2:
         if st.button("Reset Filter"):
+            # Pass empty/default values for each filter key
             filter_defaults = {
                 "jenjang_filter": [],
                 "kecamatan_filter": [],
@@ -105,13 +109,6 @@ if login():
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
 
-    # -- Ignore any row with NPSN == '0' and coerce STATUS_SEKOLAH to string and remove "0", nan, blanks --
-    df = df[(df['NPSN'].notna()) & (df['NPSN'].astype(str) != "0")]
-    if 'STATUS_SEKOLAH' in df.columns:
-        # Convert everything to str, then replace problematic values
-        df['STATUS_SEKOLAH'] = df['STATUS_SEKOLAH'].astype(str)
-        df = df[~df['STATUS_SEKOLAH'].isin(['0', 'nan', '', 'None', 'NaN', 'null', 'Null'])]
-
     st.title('Data Peserta Pelatihan Tenaga Kependidikan')
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
@@ -140,8 +137,7 @@ if login():
                 key="pelatihan_filter",
                 default=st.session_state.get("pelatihan_filter", []))
         with col5:
-            # Only show valid string status (never 0 or blank)
-            status_options = [x for x in df['STATUS_SEKOLAH'].dropna().unique() if x not in ['0', 'nan', '', 'None', 'NaN', 'null', 'Null']]
+            status_options = df['STATUS_SEKOLAH'].dropna().unique() if 'STATUS_SEKOLAH' in df.columns else []
             status_sekolah_filter = st.multiselect(
                 'STATUS SEKOLAH', 
                 status_options, 
@@ -183,11 +179,6 @@ if login():
     filtered_df = filtered_df.reset_index(drop=True)
     filtered_df.index = filtered_df.index + 1
     filtered_df['TANGGAL'] = filtered_df['TANGGAL'].dt.strftime('%Y-%m-%d')
-
-    # Make sure filtered_df STATUS_SEKOLAH is str and remove invalids for display/table again
-    if 'STATUS_SEKOLAH' in filtered_df.columns:
-        filtered_df['STATUS_SEKOLAH'] = filtered_df['STATUS_SEKOLAH'].astype(str)
-        filtered_df = filtered_df[~filtered_df['STATUS_SEKOLAH'].isin(['0', 'nan', '', 'None', 'NaN', 'null', 'Null'])]
 
     cols = list(filtered_df.columns)
     if 'STATUS_SEKOLAH' in cols and 'ASAL_SEKOLAH' in cols:
@@ -280,6 +271,7 @@ if login():
     st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang')
     st.dataframe(df_summary)
 
+    # --- Charts: "bar + pie" horizontal, always side by side ---
     chart_col1, chart_col2 = st.columns([1, 1])
     with chart_col1:
         fig_yearly = go.Figure(data=[go.Bar(
