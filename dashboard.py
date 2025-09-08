@@ -7,41 +7,37 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import plotly.graph_objects as go
 import plotly.express as px
 
-# --- CSS for layout and centering, header logo-row tweaks ---
+# CSS for fully vertically/horizontally centering logos+main
 st.markdown("""
 <style>
-[data-testid="stAppViewContainer"] > .main {
-    max-width: 100vw;
-    padding-left: 20px;
-    padding-right: 20px;
+body {
+    margin: 0 !important;
 }
-.block-container {
-    max-width: 100vw;
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-    padding-left: 20px;
-    padding-right: 20px;
+/* One root box to fully center */
+.landing-outer-center {
+    min-height: 100vh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
-.stDataFrameContainer, .css-1q8dd3e.e1fqkh3o4 {
-    max-width: 100vw !important;
+/* Inner: contains header row+main, column */
+.landing-inner-center {
+    width: 100%;
+    max-width: 980px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
-[data-testid="stSidebar"] {
-    display: none;
-}
-/* aggrid small font for mobile */
-@media (max-width: 700px) {
-    .ag-root-wrapper, .ag-theme-streamlit input { font-size:11px !important; }
-    .ag-header-cell-label, .ag-cell { font-size:10px !important; }
-}
-/* LOGO HEADER ROW FOR LANDING PAGE */
+/* Header row: logos and titles */
 .landing-header {
     width: 100%;
     display: flex;
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    margin-top: 12px;
-    margin-bottom: 24px;
+    margin-bottom: 32px;
 }
 .landing-header .header-group {
     display: flex;
@@ -50,15 +46,16 @@ st.markdown("""
     gap: 10px;
 }
 .landing-header .header-logo {
-    height: 50px;
+    height: 48px;
 }
 .landing-header .header-text {
-    font-size: 1rem;
+    font-size: 1.08rem;
     font-weight: 500;
-    line-height: 1.1;
+    line-height: 1.25;
+    white-space: nowrap;
 }
+/* Main content below header, centered */
 .landing-centered-content {
-    min-height: 72vh;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -84,28 +81,30 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 def show_landing_page():
-    # Logos & text header, then centered main section
+    # Everything centered together
     st.markdown(
-        f'''
-        <div class="landing-header">
-            <div class="header-group">
-                <img src="{DISDIK_LOGO_URL}" class="header-logo" alt="Dinas Pendidikan" />
-                <div class="header-text">Dinas Pendidikan Provinsi DKI Jakarta</div>
+        f"""
+        <div class="landing-outer-center">
+          <div class="landing-inner-center">
+            <div class="landing-header">
+                <div class="header-group">
+                    <img src="{DISDIK_LOGO_URL}" class="header-logo" alt="Dinas Pendidikan" />
+                    <div class="header-text">Dinas Pendidikan Provinsi DKI Jakarta</div>
+                </div>
+                <div class="header-group">
+                    <img src="{P4_LOGO_URL}" class="header-logo" alt="P4" />
+                    <div class="header-text">P4 Jakarta Utara dan Kepulauan Seribu</div>
+                </div>
             </div>
-            <div class="header-group">
-                <img src="{P4_LOGO_URL}" class="header-logo" alt="P4" />
-                <div class="header-text">P4 Jakarta Utara dan Kepulauan Seribu</div>
-            </div>
-        </div>
-        ''',
-        unsafe_allow_html=True
-    )
-    st.markdown('<div class="landing-centered-content">', unsafe_allow_html=True)
-    st.title("SIPADU")
-    st.subheader("Sistem Pangkalan Data Utama P4 Jakarta Utara dan Kepulauan Seribu")
+            <div class="landing-centered-content">
+                <h1 style="margin-bottom: 12px;">SIPADU</h1>
+                <h2 style="font-weight: 400; font-size: 1.5rem; margin-bottom: 20px;">
+                  Sistem Pangkalan Data Utama P4 Jakarta Utara dan Kepulauan Seribu
+                </h2>
+                """, unsafe_allow_html=True)
     if st.button("Login"):
         st.session_state.page = "login"
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("""</div></div></div>""", unsafe_allow_html=True)
 
 def login():
     st.title("Data Peserta Pelatihan Tenaga Kependidikan")
@@ -174,7 +173,6 @@ def main_app():
     df = pd.concat(dfs, ignore_index=True)
 
     st.title('Data Peserta Pelatihan Tenaga Kependidikan')
-
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
         with col1:
@@ -214,7 +212,6 @@ def main_app():
                 value=st.session_state.get("date_range", []), 
                 key="date_range"
             )
-
     conditions = []
     if jenjang_filter:
         conditions.append(df['JENJANG'].isin(jenjang_filter))
@@ -237,13 +234,11 @@ def main_app():
         filter_condition = pd.Series([True] * len(df))
 
     filtered_df = df[filter_condition]
-
     if 'NO' in filtered_df.columns:
         filtered_df = filtered_df.drop(columns=['NO'])
     filtered_df = filtered_df.reset_index(drop=True)
     filtered_df.index = filtered_df.index + 1
     filtered_df['TANGGAL'] = filtered_df['TANGGAL'].dt.strftime('%Y-%m-%d')
-
     cols = list(filtered_df.columns)
     if 'STATUS_SEKOLAH' in cols and 'ASAL_SEKOLAH' in cols:
         cols.remove('STATUS_SEKOLAH')
@@ -252,7 +247,6 @@ def main_app():
         display_df = filtered_df[cols]
     else:
         display_df = filtered_df
-
     st.write(f'Showing {display_df.shape[0]} records')
     view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
     if view_mode == 'Compact Table View':
@@ -260,13 +254,11 @@ def main_app():
         display_df_view = display_df[compact_cols].copy()
     else:
         display_df_view = display_df.copy()
-
     gb = GridOptionsBuilder.from_dataframe(display_df_view)
     gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     grid_options = gb.build()
-
     grid_response = AgGrid(
         display_df_view,
         gridOptions=grid_options,
@@ -275,7 +267,6 @@ def main_app():
         fit_columns_on_grid_load=True,
         reload_data=True,
     )
-
     selected = grid_response['selected_rows']
     if selected is not None and len(selected) > 0:
         if isinstance(selected, pd.DataFrame):
@@ -291,16 +282,13 @@ def main_app():
         participant_trainings.index = participant_trainings.index + 1
         st.dataframe(participant_trainings)
         st.write(f"Jumlah pelatihan: {participant_trainings.shape[0]}")
-
     st.write('### Kesimpulan')
     st.write('Jumlah Peserta (unique):', filtered_df['NAMA_PESERTA'].nunique())
     st.write('Jumlah Total Peserta Keseluruhan:', filtered_df['NAMA_PESERTA'].count())
     st.write('Jumlah Sekolah:', filtered_df['ASAL_SEKOLAH'].nunique())
     st.write('Jumlah Pelatihan:', filtered_df['NAMA_PELATIHAN'].nunique())
-
     filtered_df['YEAR'] = pd.to_datetime(filtered_df['TANGGAL']).dt.year
     yearly_participants = filtered_df.groupby('YEAR')['NAMA_PESERTA'].nunique().reset_index()
-
     targets = {
         'DIKMAS': 284,
         'PAUD': 2292,
@@ -309,7 +297,6 @@ def main_app():
         'SMA': 801,
         'SMK': 636,
     }
-
     summary_rows = []
     for jenjang, target in targets.items():
         df_jenjang = filtered_df[
@@ -327,14 +314,12 @@ def main_app():
             'Persentase': f"{percent:.2f} %",
             'Kurang': f"{kurang:,} Orang"
         })
-
     df_summary = pd.DataFrame(summary_rows)
     df_summary.index = df_summary.index + 1
     df_summary = df_summary[['Jenjang', 'Target Jumlah Peserta Pelatihan',
                              'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
     st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang')
     st.dataframe(df_summary)
-
     chart_col1, chart_col2 = st.columns([1, 1])
     with chart_col1:
         fig_yearly = go.Figure(data=[go.Bar(
@@ -372,7 +357,6 @@ def main_app():
             title={'text':'Proporsi Jumlah Peserta (unique) per Jenjang', 'x':0.5, 'xanchor':'center'}
         )
         st.plotly_chart(fig_pie, use_container_width=False)
-
     st.write("---")
     st.header("Upload Data Terbaru")
     upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
@@ -417,7 +401,6 @@ def main_app():
                         st.error(f"Gagal menambahkan data: {e}")
         except Exception as e:
             st.error(f"Gagal membaca file unggahan: {e}")
-
     st.markdown(
         """
         <hr>
@@ -438,8 +421,7 @@ def main_app():
         """,
         unsafe_allow_html=True,
     )
-
-# Main app logic — show landing page only with header/logos, not on login or app pages
+# Routing
 if st.session_state.page == "landing":
     show_landing_page()
 elif st.session_state.page == "login":
