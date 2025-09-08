@@ -36,40 +36,50 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-def login():
-    if "logged_in" not in st.session_state:
-        st.session_state.logged_in = False
-    if not st.session_state.logged_in:
-        st.title("Data Peserta Pelatihan Tenaga Kependidikan")
-        st.subheader("Login Required")
-        username = st.text_input("Username", key="username")
-        password = st.text_input("Password", type="password", key="password")
-        if st.button("Login"):
-            if (username == st.secrets["LOGIN_USERNAME"] and
-                password == st.secrets["LOGIN_PASSWORD"]):
-                st.session_state.logged_in = True
-            else:
-                st.error("Invalid username or password")
-        return False
-    return True
+# Initialize session states
+if "page" not in st.session_state:
+    st.session_state.page = "landing"
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
 
-# --- Filter reset logic ---
+def show_landing_page():
+    st.title("SIPADU")
+    st.subheader("Sistem Pangkalan Data Utama P4 Jakarta Utara dan Kepulauan Seribu")
+    st.markdown("""
+        <p>Selamat datang di SIPADU, aplikasi manajemen data peserta pelatihan tenaga kependidikan DKI Jakarta Utara dan Kepulauan Seribu.</p>
+        <p>Silakan klik tombol di bawah untuk masuk ke halaman login dan menggunakan aplikasi.</p>
+    """, unsafe_allow_html=True)
+    if st.button("Masuk ke Login"):
+        st.session_state.page = "login"
+        st.experimental_rerun()
+
+def login():
+    st.title("Data Peserta Pelatihan Tenaga Kependidikan")
+    st.subheader("Login Required")
+    username = st.text_input("Username", key="username")
+    password = st.text_input("Password", type="password", key="password")
+    if st.button("Login"):
+        if (username == st.secrets["LOGIN_USERNAME"] and
+            password == st.secrets["LOGIN_PASSWORD"]):
+            st.session_state.logged_in = True
+            st.experimental_rerun()
+        else:
+            st.error("Invalid username or password")
+
 def reset_filters(options_dict):
     for key, default in options_dict.items():
         st.session_state[key] = default
 
-if login():
+def main_app():
     st.markdown("<br>", unsafe_allow_html=True)
-
     # --- Button Row ---
     colbtn1, colbtn2, _ = st.columns([1, 1, 8])
     with colbtn1:
         if st.button("Refresh Data"):
             st.cache_data.clear()
-            st.rerun()
+            st.experimental_rerun()
     with colbtn2:
         if st.button("Reset Filter"):
-            # Pass empty/default values for each filter key
             filter_defaults = {
                 "jenjang_filter": [],
                 "kecamatan_filter": [],
@@ -79,7 +89,7 @@ if login():
                 "date_range": []
             }
             reset_filters(filter_defaults)
-            st.rerun()
+            st.experimental_rerun()
 
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
@@ -110,6 +120,7 @@ if login():
     df = pd.concat(dfs, ignore_index=True)
 
     st.title('Data Peserta Pelatihan Tenaga Kependidikan')
+
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
         with col1:
@@ -164,7 +175,6 @@ if login():
     if len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
-
     if conditions:
         filter_condition = conditions[0]
         for cond in conditions[1:]:
@@ -190,7 +200,6 @@ if login():
         display_df = filtered_df
 
     st.write(f'Showing {display_df.shape[0]} records')
-
     view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
     if view_mode == 'Compact Table View':
         compact_cols = ['NAMA_PESERTA', 'NAMA_PELATIHAN', 'TANGGAL']
@@ -212,6 +221,7 @@ if login():
         fit_columns_on_grid_load=True,
         reload_data=True,
     )
+
     selected = grid_response['selected_rows']
     if selected is not None and len(selected) > 0:
         if isinstance(selected, pd.DataFrame):
@@ -245,6 +255,7 @@ if login():
         'SMA': 801,
         'SMK': 636,
     }
+
     summary_rows = []
     for jenjang, target in targets.items():
         df_jenjang = filtered_df[
@@ -267,7 +278,6 @@ if login():
     df_summary.index = df_summary.index + 1
     df_summary = df_summary[['Jenjang', 'Target Jumlah Peserta Pelatihan',
                              'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
-
     st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang')
     st.dataframe(df_summary)
 
@@ -375,3 +385,12 @@ if login():
         """,
         unsafe_allow_html=True,
     )
+
+# Control page navigation
+if st.session_state.page == "landing":
+    show_landing_page()
+elif st.session_state.page == "login":
+    if st.session_state.logged_in:
+        main_app()
+    else:
+        login()
