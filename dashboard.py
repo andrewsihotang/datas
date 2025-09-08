@@ -53,15 +53,12 @@ def login():
         return False
     return True
 
-# --- Filter reset logic ---
 def reset_filters(options_dict):
     for key, default in options_dict.items():
         st.session_state[key] = default
 
 if login():
     st.markdown("<br>", unsafe_allow_html=True)
-
-    # --- Button Row ---
     colbtn1, colbtn2, _ = st.columns([1, 1, 8])
     with colbtn1:
         if st.button("Refresh Data"):
@@ -69,7 +66,6 @@ if login():
             st.rerun()
     with colbtn2:
         if st.button("Reset Filter"):
-            # Pass empty/default values for each filter key
             filter_defaults = {
                 "jenjang_filter": [],
                 "kecamatan_filter": [],
@@ -109,6 +105,9 @@ if login():
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
 
+    # -- Ignore any row with NPSN == '0' --
+    df = df[(df['NPSN'].notna()) & (df['NPSN'].astype(str) != "0")]
+
     st.title('Data Peserta Pelatihan Tenaga Kependidikan')
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
@@ -137,7 +136,8 @@ if login():
                 key="pelatihan_filter",
                 default=st.session_state.get("pelatihan_filter", []))
         with col5:
-            status_options = df['STATUS_SEKOLAH'].dropna().unique() if 'STATUS_SEKOLAH' in df.columns else []
+            # Only allow valid STATUS_SEKOLAH (not 0 or empty)
+            status_options = [x for x in df['STATUS_SEKOLAH'].dropna().unique() if x not in [0, "0", ""]]
             status_sekolah_filter = st.multiselect(
                 'STATUS SEKOLAH', 
                 status_options, 
@@ -271,7 +271,6 @@ if login():
     st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang')
     st.dataframe(df_summary)
 
-    # --- Charts: "bar + pie" horizontal, always side by side ---
     chart_col1, chart_col2 = st.columns([1, 1])
     with chart_col1:
         fig_yearly = go.Figure(data=[go.Bar(
