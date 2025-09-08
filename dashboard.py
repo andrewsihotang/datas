@@ -33,7 +33,9 @@ st.markdown("""
     .ag-root-wrapper, .ag-theme-streamlit input { font-size:11px !important; }
     .ag-header-cell-label, .ag-cell { font-size:10px !important; }
 }
+.center-plotly-row {display: flex; flex-direction: row; gap: 24px; justify-content: center; align-items: flex-start; margin-bottom: 32px;}
 .center-plotly {display: flex; flex-direction: column; align-items: center; margin-bottom: 32px;}
+.button-row {display: flex; flex-direction: row; gap: 12px; align-items: center;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -54,11 +56,26 @@ def login():
         return False
     return True
 
+def reset_filters():
+    for key in ("jenjang_filter", "kecamatan_filter", "nama_pelatihan_filter", 
+                "pelatihan_filter", "status_sekolah_filter", "date_range"):
+        if key in st.session_state:
+            del st.session_state[key]
+
 if login():
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    if st.button("Refresh Data"):
-        st.cache_data.clear()
-        st.rerun()
+    st.markdown("<br>", unsafe_allow_html=True)
+    # Button row for Refresh and Reset Filter
+    st.markdown('<div class="button-row">', unsafe_allow_html=True)
+    col_btn1, col_btn2 = st.columns([1, 1])
+    with col_btn1:
+        if st.button("Refresh Data"):
+            st.cache_data.clear()
+            st.rerun()
+    with col_btn2:
+        if st.button("Reset Filter"):
+            reset_filters()
+            st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
 
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
@@ -73,7 +90,7 @@ if login():
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
         if 'NPSN' in df.columns:
             df['NPSN'] = df['NPSN'].astype(str)
-        if 'STASUS_SEKOLAH' in df.columns:
+        if 'STASUS_SEKOLAH' in df.columns:  # Fix typo if present
             df.rename(columns={'STASUS_SEKOLAH': 'STATUS_SEKOLAH'}, inplace=True)
         if 'STATUS_SEKOLAH' not in df.columns:
             df['STATUS_SEKOLAH'] = pd.NA
@@ -89,22 +106,21 @@ if login():
     df = pd.concat(dfs, ignore_index=True)
 
     st.title('Data Peserta Pelatihan Tenaga Kependidikan')
-
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
         with col1:
-            jenjang_filter = st.multiselect('JENJANG', df['JENJANG'].dropna().unique())
+            jenjang_filter = st.multiselect('JENJANG', df['JENJANG'].dropna().unique(), key="jenjang_filter")
         with col2:
-            kecamatan_filter = st.multiselect('KECAMATAN', df['KECAMATAN'].dropna().unique())
+            kecamatan_filter = st.multiselect('KECAMATAN', df['KECAMATAN'].dropna().unique(), key="kecamatan_filter")
         with col3:
-            nama_pelatihan_filter = st.multiselect('NAMA_PELATIHAN', df['NAMA_PELATIHAN'].dropna().unique())
+            nama_pelatihan_filter = st.multiselect('NAMA PELATIHAN', df['NAMA_PELATIHAN'].dropna().unique(), key="nama_pelatihan_filter")
         with col4:
-            pelatihan_filter = st.multiselect('PELATIHAN', df['PELATIHAN'].dropna().unique())
+            pelatihan_filter = st.multiselect('PELATIHAN', df['PELATIHAN'].dropna().unique(), key="pelatihan_filter")
         with col5:
             status_options = df['STATUS_SEKOLAH'].dropna().unique() if 'STATUS_SEKOLAH' in df.columns else []
-            status_sekolah_filter = st.multiselect('STATUS SEKOLAH', status_options)
+            status_sekolah_filter = st.multiselect('STATUS SEKOLAH', status_options, key="status_sekolah_filter")
         with col6:
-            date_range = st.date_input('TANGGAL', value=[])
+            date_range = st.date_input('TANGGAL', value=[], key="date_range")
 
     conditions = []
     if jenjang_filter:
@@ -148,16 +164,15 @@ if login():
     st.write(f'Showing {display_df.shape[0]} records')
 
     # Toggle: Full or Compact view
-    view_mode = st.radio("Table view mode:", ['Full Columns', 'Compact Columns'], horizontal=True)
-
-    if view_mode == 'Compact Columns':
+    view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
+    if view_mode == 'Compact Table View':
         compact_cols = ['NAMA_PESERTA', 'NAMA_PELATIHAN', 'TANGGAL']
         display_df_view = display_df[compact_cols].copy()
     else:
         display_df_view = display_df.copy()
 
     gb = GridOptionsBuilder.from_dataframe(display_df_view)
-    gb.configure_pagination(enabled=True)
+    gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)  # Show 20 rows by default
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     grid_options = gb.build()
@@ -166,7 +181,7 @@ if login():
         display_df_view,
         gridOptions=grid_options,
         update_mode=GridUpdateMode.SELECTION_CHANGED,
-        height=400,
+        height=500,
         fit_columns_on_grid_load=True,
         reload_data=True,
     )
@@ -186,12 +201,14 @@ if login():
         st.dataframe(participant_trainings)
         st.write(f"Jumlah pelatihan: {participant_trainings.shape[0]}")
 
+    # --- KESIMPULAN ---
     st.write('### Kesimpulan')
     st.write('Jumlah Peserta (unique):', filtered_df['NAMA_PESERTA'].nunique())
     st.write('Jumlah Total Peserta Keseluruhan:', filtered_df['NAMA_PESERTA'].count())
     st.write('Jumlah Sekolah:', filtered_df['ASAL_SEKOLAH'].nunique())
     st.write('Jumlah Pelatihan:', filtered_df['NAMA_PELATIHAN'].nunique())
 
+    # Yearly participants chart
     filtered_df['YEAR'] = pd.to_datetime(filtered_df['TANGGAL']).dt.year
     yearly_participants = filtered_df.groupby('YEAR')['NAMA_PESERTA'].nunique().reset_index()
 
@@ -230,7 +247,8 @@ if login():
     st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang')
     st.dataframe(df_summary)
 
-    st.markdown('<div class="center-plotly">', unsafe_allow_html=True)
+    # --- Charts: row layout ---
+    st.markdown('<div class="center-plotly-row">', unsafe_allow_html=True)
     fig_yearly = go.Figure(data=[go.Bar(
         x=yearly_participants['YEAR'].astype(str),
         y=yearly_participants['NAMA_PESERTA'],
@@ -239,17 +257,15 @@ if login():
         marker_color='#1f77b4'
     )])
     fig_yearly.update_layout(
-        title={'text':'Grafik Jumlah Peserta (unique)', 'x':0.5, 'xanchor':'center'},
+        title={'text':'Grafik Jumlah Peserta (unique)','x':0.5,'xanchor':'center'},
         xaxis_title='Tahun',
         yaxis_title='Jumlah',
         template='plotly_white',
         height=350,
-        width=500
+        width=400
     )
     st.plotly_chart(fig_yearly, use_container_width=False)
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="center-plotly">', unsafe_allow_html=True)
     pie_data = df_summary.copy()
     pie_data['UniqueValue'] = (
         pie_data['Jumlah Peserta Pelatihan (unique)'].str.replace(' Orang', '', regex=False).replace('', '0').astype(int)
@@ -264,7 +280,7 @@ if login():
     fig_pie.update_layout(
         showlegend=True,
         height=350,
-        width=500,
+        width=400,
         title={'text':'Proporsi Jumlah Peserta (unique) per Jenjang', 'x':0.5, 'xanchor':'center'}
     )
     st.plotly_chart(fig_pie, use_container_width=False)
