@@ -7,7 +7,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import plotly.graph_objects as go
 import plotly.express as px
 
-# --- CSS for layout and centering, header logo-row tweaks ---
+# --- CSS for layout and header logo-row tweaks, NO tall vertical spacing ---
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main {
@@ -41,7 +41,7 @@ st.markdown("""
     justify-content: space-between;
     align-items: center;
     margin-top: 12px;
-    margin-bottom: 24px;
+    margin-bottom: 16px;
 }
 .landing-header .header-group {
     display: flex;
@@ -50,25 +50,33 @@ st.markdown("""
     gap: 10px;
 }
 .landing-header .header-logo {
-    height: 50px;
+    height: 46px;
 }
 .landing-header .header-text {
     font-size: 1rem;
     font-weight: 500;
     line-height: 1.1;
 }
+/* Move up the landing content */
 .landing-centered-content {
-    min-height: 72vh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    margin-top: 0px;
+    margin-bottom: 0px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    min-height: unset !important;
+    height: auto !important;
 }
 .landing-centered-content h1, .landing-centered-content h2 {
     text-align: center;
+    margin-bottom: 6px;
+    margin-top: 0px;
 }
 .landing-centered-content button {
-    margin-top: 28px;
+    margin-top: 18px;
     width: 120px;
 }
 </style>
@@ -84,7 +92,7 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 def show_landing_page():
-    # Logos & text header, then centered main section
+    # Logos & text header, then centered main section (moved up)
     st.markdown(
         f'''
         <div class="landing-header">
@@ -166,7 +174,6 @@ def main_app():
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
     spreadsheet_id = '1_YeSK2zgoExnC8n6tlmoJFQDVEWZbncdBLx8S5k-ljc'
     sheet_names = ['Tendik', 'Pendidik', 'Kejuruan']
-
     dfs = []
     for sheet_name in sheet_names:
         df_sheet = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
@@ -174,7 +181,6 @@ def main_app():
     df = pd.concat(dfs, ignore_index=True)
 
     st.title('Data Peserta Pelatihan Tenaga Kependidikan')
-
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
         with col1:
@@ -215,6 +221,7 @@ def main_app():
                 key="date_range"
             )
 
+    # Filtering
     conditions = []
     if jenjang_filter:
         conditions.append(df['JENJANG'].isin(jenjang_filter))
@@ -254,19 +261,19 @@ def main_app():
         display_df = filtered_df
 
     st.write(f'Showing {display_df.shape[0]} records')
+
     view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
     if view_mode == 'Compact Table View':
         compact_cols = ['NAMA_PESERTA', 'NAMA_PELATIHAN', 'TANGGAL']
         display_df_view = display_df[compact_cols].copy()
     else:
         display_df_view = display_df.copy()
-
+    
     gb = GridOptionsBuilder.from_dataframe(display_df_view)
     gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     grid_options = gb.build()
-
     grid_response = AgGrid(
         display_df_view,
         gridOptions=grid_options,
@@ -332,10 +339,12 @@ def main_app():
     df_summary.index = df_summary.index + 1
     df_summary = df_summary[['Jenjang', 'Target Jumlah Peserta Pelatihan',
                              'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
+
     st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang')
     st.dataframe(df_summary)
 
     chart_col1, chart_col2 = st.columns([1, 1])
+
     with chart_col1:
         fig_yearly = go.Figure(data=[go.Bar(
             x=yearly_participants['YEAR'].astype(str),
@@ -353,6 +362,7 @@ def main_app():
             width=430
         )
         st.plotly_chart(fig_yearly, use_container_width=False)
+
     with chart_col2:
         pie_data = df_summary.copy()
         pie_data['UniqueValue'] = (
