@@ -7,7 +7,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import plotly.graph_objects as go
 import plotly.express as px
 
-# --- CSS for margins, font size, layout tweaks including centering landing page content ---
+# --- CSS for layout and centering, header logo-row tweaks ---
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main {
@@ -28,94 +28,86 @@ st.markdown("""
 [data-testid="stSidebar"] {
     display: none;
 }
-/* Smaller text in aggrid on small screens */
+/* aggrid small font for mobile */
 @media (max-width: 700px) {
     .ag-root-wrapper, .ag-theme-streamlit input { font-size:11px !important; }
     .ag-header-cell-label, .ag-cell { font-size:10px !important; }
 }
-/* Layout for header logos and text */
-.header-container {
+/* LOGO HEADER ROW FOR LANDING PAGE */
+.landing-header {
+    width: 100%;
     display: flex;
+    flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 20px;
+    margin-top: 12px;
+    margin-bottom: 24px;
 }
-.header-left, .header-right {
+.landing-header .header-group {
     display: flex;
+    flex-direction: row;
     align-items: center;
     gap: 10px;
 }
-.header-left img, .header-right img {
+.landing-header .header-logo {
     height: 50px;
 }
-/* Center landing page content */
-.landing-container {
+.landing-header .header-text {
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.1;
+}
+.landing-centered-content {
+    min-height: 72vh;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    height: 75vh;
+}
+.landing-centered-content h1, .landing-centered-content h2 {
     text-align: center;
 }
-.landing-logo {
-    height: 120px;
-    margin-bottom: 20px;
-}
-/* Button style override to center */
-.landing-container > button {
-    margin-top: 20px;
+.landing-centered-content button {
+    margin-top: 28px;
     width: 120px;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session states for page and login
+# Logo URLs
+DISDIK_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/disdik_jakarta.png"
+P4_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/p4.png"
+
 if "page" not in st.session_state:
     st.session_state.page = "landing"
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# URLs for logos (raw GitHubusercontent links for direct image access)
-DISDIK_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/disdik_jakarta.png"
-P4_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/p4.png"
-SIPADU_LOGO_URL = P4_LOGO_URL  # Using P4 logo as main landing page logo
-
-def show_header():
-    # Header with logos and text top corners
-    col1, col2, col3 = st.columns([1,6,1])
-    with col1:
-        st.markdown(
-            f"""
-            <div class="header-left">
-                <img src="{DISDIK_LOGO_URL}" alt="Dinas Pendidikan Logo" />
-                <span>Dinas Pendidikan Provinsi DKI Jakarta</span>
-            </div>
-            """,
-            unsafe_allow_html=True)
-    with col3:
-        st.markdown(
-            f"""
-            <div class="header-right" style="justify-content: flex-end;">
-                <span>P4 Jakarta Utara dan Kepulauan Seribu</span>
-                <img src="{P4_LOGO_URL}" alt="P4 Logo" />
-            </div>
-            """,
-            unsafe_allow_html=True)
-
 def show_landing_page():
-    show_header()
-    st.markdown('<div class="landing-container">', unsafe_allow_html=True)
-    # Main SIPADU logo, centered above title
-    st.markdown(f'<img class="landing-logo" src="{SIPADU_LOGO_URL}" alt="SIPADU Logo" />', unsafe_allow_html=True)
+    # Logos & text header, then centered main section
+    st.markdown(
+        f'''
+        <div class="landing-header">
+            <div class="header-group">
+                <img src="{DISDIK_LOGO_URL}" class="header-logo" alt="Dinas Pendidikan" />
+                <div class="header-text">Dinas Pendidikan Provinsi DKI Jakarta</div>
+            </div>
+            <div class="header-group">
+                <img src="{P4_LOGO_URL}" class="header-logo" alt="P4" />
+                <div class="header-text">P4 Jakarta Utara dan Kepulauan Seribu</div>
+            </div>
+        </div>
+        ''',
+        unsafe_allow_html=True
+    )
+    st.markdown('<div class="landing-centered-content">', unsafe_allow_html=True)
     st.title("SIPADU")
     st.subheader("Sistem Pangkalan Data Utama P4 Jakarta Utara dan Kepulauan Seribu")
-    # Removed the sentence as requested
     if st.button("Login"):
         st.session_state.page = "login"
     st.markdown('</div>', unsafe_allow_html=True)
 
 def login():
-    show_header()
     st.title("Data Peserta Pelatihan Tenaga Kependidikan")
     st.subheader("Login Required")
     username = st.text_input("Username", key="username")
@@ -135,9 +127,7 @@ def reset_filters(options_dict):
         st.session_state[key] = default
 
 def main_app():
-    show_header()
     st.markdown("<br>", unsafe_allow_html=True)
-    # --- Button Row ---
     colbtn1, colbtn2, _ = st.columns([1, 1, 8])
     with colbtn1:
         if st.button("Refresh Data"):
@@ -345,7 +335,6 @@ def main_app():
     st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang')
     st.dataframe(df_summary)
 
-    # --- Charts: "bar + pie" horizontal, always side by side ---
     chart_col1, chart_col2 = st.columns([1, 1])
     with chart_col1:
         fig_yearly = go.Figure(data=[go.Bar(
@@ -450,17 +439,13 @@ def main_app():
         unsafe_allow_html=True,
     )
 
-# Main page control rendering
+# Main app logic — show landing page only with header/logos, not on login or app pages
 if st.session_state.page == "landing":
     show_landing_page()
 elif st.session_state.page == "login":
-    if st.session_state.logged_in:
-        main_app()
-    else:
-        login()
+    login()
 elif st.session_state.page == "main":
     main_app()
 else:
-    # Fallback to landing page if state corrupted
     st.session_state.page = "landing"
     show_landing_page()
