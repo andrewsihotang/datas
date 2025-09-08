@@ -51,7 +51,7 @@ def show_landing_page():
         <p>Selamat datang di SIPADU, aplikasi manajemen data peserta pelatihan P4 Jakarta Utara dan Kepulauan Seribu.</p>
         <p>Silakan klik tombol di bawah untuk masuk ke halaman login dan menggunakan aplikasi.</p>
     """, unsafe_allow_html=True)
-    if st.button("Masuk ke Login"):
+    if st.button("Login"):
         st.session_state.page = "login"
         # Streamlit auto reruns on any widget interaction, so no explicit rerun needed
 
@@ -402,4 +402,5 @@ else:
     # Fallback to landing page if state corrupted
     st.session_state.page = "landing"
     show_landing_page()
+
 
