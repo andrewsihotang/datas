@@ -280,7 +280,7 @@ def main_app():
         st.dataframe(participant_trainings)
         st.write(f"Jumlah pelatihan: {participant_trainings.shape[0]}")
 
-    # Removed Kesimpulan section as requested
+    st.markdown('*Data cutoff: 08 September 2025*')
 
     # Add horizontal separator before summary tables
     st.markdown('---')
@@ -361,17 +361,41 @@ def main_app():
         )
         st.plotly_chart(fig_pie, use_container_width=False)
 
-    # New: Rekap by Jumlah Sekolah with cutoff note
-    sekolah_data = {
-        'Jenjang': ['PAUD', 'DIKMAS', 'SD', 'SMP', 'SMA', 'SMK'],
-        'Jumlah Sekolah': ['855 sekolah', '149 sekolah', '424 sekolah', '239 sekolah', '111 sekolah', '76 sekolah'],
-        'Catatan': ['Data cutoff: 08 September 2025'] * 6
+    # Rekap by Jumlah Sekolah with same column schema
+    sekolah_targets = {
+        'PAUD': 855,
+        'DIKMAS': 149,
+        'SD': 424,
+        'SMP': 239,
+        'SMA': 111,
+        'SMK': 76,
     }
-    df_sekolah = pd.DataFrame(sekolah_data)
+
+    # Calculate unique schools per jenjang in filtered df
+    sekolah_rows = []
+    for jenjang, target in sekolah_targets.items():
+        df_sekolah = filtered_df[
+            (filtered_df['JENJANG'] == jenjang) &
+            (filtered_df['ASAL_SEKOLAH'].notna()) &
+            (filtered_df['ASAL_SEKOLAH'] != '')
+        ]
+        unique_sekolah_count = df_sekolah['ASAL_SEKOLAH'].nunique()
+        percent = (unique_sekolah_count / target * 100) if target else 0
+        kurang = max(0, target - unique_sekolah_count) if unique_sekolah_count < target else 0
+        sekolah_rows.append({
+            'Jenjang': jenjang,
+            'Target Jumlah Sekolah': f"{target:,} Sekolah",
+            'Jumlah Sekolah (unique)': f"{unique_sekolah_count:,} Sekolah",
+            'Persentase': f"{percent:.2f} %",
+            'Kurang': f"{kurang:,} Sekolah"
+        })
+
+    df_sekolah = pd.DataFrame(sekolah_rows)
     df_sekolah.index = df_sekolah.index + 1
+    df_sekolah = df_sekolah[['Jenjang', 'Target Jumlah Sekolah', 'Jumlah Sekolah (unique)', 'Persentase', 'Kurang']]
 
     st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jumlah Sekolah')
-    st.markdown('*Catatan: Data cutoff per 08 September 2025*')
+    st.markdown('*Data cutoff: 08 September 2025*')
     st.dataframe(df_sekolah)
 
     st.write("---")
