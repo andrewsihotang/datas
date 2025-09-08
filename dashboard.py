@@ -7,7 +7,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import plotly.graph_objects as go
 import plotly.express as px
 
-# --- CSS for margins and font size tweak on mobile ---
+# --- CSS for margins, font size, layout tweaks including centering landing page content ---
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main {
@@ -33,29 +33,89 @@ st.markdown("""
     .ag-root-wrapper, .ag-theme-streamlit input { font-size:11px !important; }
     .ag-header-cell-label, .ag-cell { font-size:10px !important; }
 }
+/* Layout for header logos and text */
+.header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+}
+.header-left, .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.header-left img, .header-right img {
+    height: 50px;
+}
+/* Center landing page content */
+.landing-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 75vh;
+    text-align: center;
+}
+.landing-logo {
+    height: 120px;
+    margin-bottom: 20px;
+}
+/* Button style override to center */
+.landing-container > button {
+    margin-top: 20px;
+    width: 120px;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session states for page and login if not already
+# Initialize session states for page and login
 if "page" not in st.session_state:
     st.session_state.page = "landing"
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# Manage navigation without st.experimental_rerun by re-rendering based on session state
+# URLs for logos (raw GitHubusercontent links for direct image access)
+DISDIK_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/disdik_jakarta.png"
+P4_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/p4.png"
+SIPADU_LOGO_URL = P4_LOGO_URL  # Using P4 logo as main landing page logo
+
+def show_header():
+    # Header with logos and text top corners
+    col1, col2, col3 = st.columns([1,6,1])
+    with col1:
+        st.markdown(
+            f"""
+            <div class="header-left">
+                <img src="{DISDIK_LOGO_URL}" alt="Dinas Pendidikan Logo" />
+                <span>Dinas Pendidikan Provinsi DKI Jakarta</span>
+            </div>
+            """,
+            unsafe_allow_html=True)
+    with col3:
+        st.markdown(
+            f"""
+            <div class="header-right" style="justify-content: flex-end;">
+                <span>P4 Jakarta Utara dan Kepulauan Seribu</span>
+                <img src="{P4_LOGO_URL}" alt="P4 Logo" />
+            </div>
+            """,
+            unsafe_allow_html=True)
 
 def show_landing_page():
+    show_header()
+    st.markdown('<div class="landing-container">', unsafe_allow_html=True)
+    # Main SIPADU logo, centered above title
+    st.markdown(f'<img class="landing-logo" src="{SIPADU_LOGO_URL}" alt="SIPADU Logo" />', unsafe_allow_html=True)
     st.title("SIPADU")
     st.subheader("Sistem Pangkalan Data Utama P4 Jakarta Utara dan Kepulauan Seribu")
-    st.markdown("""
-        <p>Selamat datang di SIPADU, aplikasi manajemen data peserta pelatihan tenaga kependidikan DKI Jakarta Utara dan Kepulauan Seribu.</p>
-        <p>Silakan klik tombol di bawah untuk masuk ke halaman login dan menggunakan aplikasi.</p>
-    """, unsafe_allow_html=True)
-    if st.button("Masuk ke Login"):
+    # Removed the sentence as requested
+    if st.button("Login"):
         st.session_state.page = "login"
-        # Streamlit auto reruns on any widget interaction, so no explicit rerun needed
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def login():
+    show_header()
     st.title("Data Peserta Pelatihan Tenaga Kependidikan")
     st.subheader("Login Required")
     username = st.text_input("Username", key="username")
@@ -75,6 +135,7 @@ def reset_filters(options_dict):
         st.session_state[key] = default
 
 def main_app():
+    show_header()
     st.markdown("<br>", unsafe_allow_html=True)
     # --- Button Row ---
     colbtn1, colbtn2, _ = st.columns([1, 1, 8])
