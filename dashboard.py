@@ -7,20 +7,20 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import plotly.graph_objects as go
 import plotly.express as px
 
-# --- CSS for centering and layout (header row/disdik & p4 logos) ---
+# --- CSS for layout and centering, header logo-row tweaks ---
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main {
     max-width: 100vw;
-    padding-left: 0;
-    padding-right: 0;
+    padding-left: 20px;
+    padding-right: 20px;
 }
 .block-container {
     max-width: 100vw;
-    padding-top: 0;
-    padding-bottom: 0;
-    padding-left: 0;
-    padding-right: 0;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    padding-left: 20px;
+    padding-right: 20px;
 }
 .stDataFrameContainer, .css-1q8dd3e.e1fqkh3o4 {
     max-width: 100vw !important;
@@ -33,17 +33,15 @@ st.markdown("""
     .ag-root-wrapper, .ag-theme-streamlit input { font-size:11px !important; }
     .ag-header-cell-label, .ag-cell { font-size:10px !important; }
 }
-/* LOGO HEADER ROW */
+/* LOGO HEADER ROW FOR LANDING PAGE */
 .landing-header {
-    width: 100vw;
+    width: 100%;
     display: flex;
     flex-direction: row;
     justify-content: space-between;
-    align-items: flex-start;
-    margin-top: 18px;
-    margin-bottom: 10px;
-    padding-left: 36px;
-    padding-right: 36px;
+    align-items: center;
+    margin-top: 12px;
+    margin-bottom: 24px;
 }
 .landing-header .header-group {
     display: flex;
@@ -52,29 +50,26 @@ st.markdown("""
     gap: 10px;
 }
 .landing-header .header-logo {
-    height: 44px;
+    height: 50px;
 }
 .landing-header .header-text {
     font-size: 1rem;
     font-weight: 500;
-    line-height: 1.25;
+    line-height: 1.1;
 }
-.center-mid-abs {
-    min-height: 86vh;
-    width: 100vw;
+.landing-centered-content {
+    min-height: 72vh;
     display: flex;
     flex-direction: column;
-    align-items: center !important;
-    justify-content: center !important;
+    align-items: center;
+    justify-content: center;
 }
-.center-mid-abs h1, .center-mid-abs h2, .center-mid-abs h3, .center-mid-abs .stButton, .center-mid-abs .stAlert {
-    text-align: center !important;
-    align-self: center !important;
+.landing-centered-content h1, .landing-centered-content h2 {
+    text-align: center;
 }
-.center-mid-abs button {
+.landing-centered-content button {
     margin-top: 28px;
     width: 120px;
-    align-self: center !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -89,7 +84,7 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 def show_landing_page():
-    # Logos & text header, then perfectly center main section
+    # Logos & text header, then centered main section
     st.markdown(
         f'''
         <div class="landing-header">
@@ -105,7 +100,7 @@ def show_landing_page():
         ''',
         unsafe_allow_html=True
     )
-    st.markdown('<div class="center-mid-abs">', unsafe_allow_html=True)
+    st.markdown('<div class="landing-centered-content">', unsafe_allow_html=True)
     st.title("SIPADU")
     st.subheader("Sistem Pangkalan Data Utama P4 Jakarta Utara dan Kepulauan Seribu")
     if st.button("Login"):
@@ -444,7 +439,7 @@ def main_app():
         unsafe_allow_html=True,
     )
 
-# Routing logic
+# Main app logic — show landing page only with header/logos, not on login or app pages
 if st.session_state.page == "landing":
     show_landing_page()
 elif st.session_state.page == "login":
