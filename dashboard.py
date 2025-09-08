@@ -48,10 +48,10 @@ def show_landing_page():
     st.title("SIPADU")
     st.subheader("Sistem Pangkalan Data Utama P4 Jakarta Utara dan Kepulauan Seribu")
     st.markdown("""
-        <p>Selamat datang di SIPADU, aplikasi manajemen data peserta pelatihan P4 Jakarta Utara dan Kepulauan Seribu.</p>
-
+        <p>Selamat datang di SIPADU, aplikasi manajemen data peserta pelatihan tenaga kependidikan DKI Jakarta Utara dan Kepulauan Seribu.</p>
+        <p>Silakan klik tombol di bawah untuk masuk ke halaman login dan menggunakan aplikasi.</p>
     """, unsafe_allow_html=True)
-    if st.button("Login"):
+    if st.button("Masuk ke Login"):
         st.session_state.page = "login"
         # Streamlit auto reruns on any widget interaction, so no explicit rerun needed
 
@@ -61,8 +61,10 @@ def login():
     username = st.text_input("Username", key="username")
     password = st.text_input("Password", type="password", key="password")
     if st.button("Login"):
-        if (username == st.secrets["LOGIN_USERNAME"] and
-            password == st.secrets["LOGIN_PASSWORD"]):
+        if not username or not password:
+            st.warning("Silakan isi Username dan Password terlebih dahulu.")
+        elif (username == st.secrets["LOGIN_USERNAME"] and
+              password == st.secrets["LOGIN_PASSWORD"]):
             st.session_state.logged_in = True
             st.session_state.page = "main"
         else:
@@ -79,7 +81,6 @@ def main_app():
     with colbtn1:
         if st.button("Refresh Data"):
             st.cache_data.clear()
-            # No rerun called; Streamlit reruns automatically on button clicks
     with colbtn2:
         if st.button("Reset Filter"):
             filter_defaults = {
@@ -402,6 +403,3 @@ else:
     # Fallback to landing page if state corrupted
     st.session_state.page = "landing"
     show_landing_page()
-
-
-
