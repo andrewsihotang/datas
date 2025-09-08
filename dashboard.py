@@ -7,7 +7,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import plotly.graph_objects as go
 import plotly.express as px
 
-# --- CSS for layout and header logo-row tweaks, NO tall vertical spacing ---
+# --- CSS for layout and header/logo tweaks, no tall vertical spacing ---
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main {
@@ -163,7 +163,6 @@ def main_app():
 
     st.title('Data Peserta Pelatihan Tenaga Kependidikan')
 
-    # Filters container
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
         with col1:
@@ -204,7 +203,6 @@ def main_app():
                 key="date_range"
             )
 
-    # Filtering logic
     conditions = []
     if jenjang_filter:
         conditions.append(df['JENJANG'].isin(jenjang_filter))
@@ -257,7 +255,7 @@ def main_app():
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     grid_options = gb.build()
-    AgGrid(
+    grid_response = AgGrid(
         display_df_view,
         gridOptions=grid_options,
         update_mode=GridUpdateMode.SELECTION_CHANGED,
@@ -265,6 +263,27 @@ def main_app():
         fit_columns_on_grid_load=True,
         reload_data=True,
     )
+
+    selected = grid_response['selected_rows']
+    if selected is not None and len(selected) > 0:
+        if isinstance(selected, pd.DataFrame):
+            selected_list = selected.to_dict(orient='records')
+        else:
+            selected_list = selected
+        selected_name = selected_list[0].get('NAMA_PESERTA', '')
+        st.markdown("### Detail Peserta")
+        st.write(f"Semua pelatihan yang diikuti oleh: **{selected_name}**")
+        participant_trainings = filtered_df[filtered_df['NAMA_PESERTA'] == selected_name][
+            ['NAMA_PELATIHAN', 'TANGGAL', 'ASAL_SEKOLAH', 'NPSN']
+        ].drop_duplicates().reset_index(drop=True)
+        participant_trainings.index = participant_trainings.index + 1
+        st.dataframe(participant_trainings)
+        st.write(f"Jumlah pelatihan: {participant_trainings.shape[0]}")
+
+    # Removed Kesimpulan section as requested
+
+    # Add horizontal separator before summary tables
+    st.markdown('---')
 
     # Summary by Jenjang (pelatihan peserta achievement)
     targets = {
@@ -300,7 +319,47 @@ def main_app():
     st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang')
     st.dataframe(df_summary)
 
-    st.markdown('---')
+    chart_col1, chart_col2 = st.columns([1, 1])
+
+    with chart_col1:
+        yearly_participants = filtered_df.groupby(filtered_df['TANGGAL'].str[:4])['NAMA_PESERTA'].nunique().reset_index()
+        yearly_participants.columns = ['YEAR', 'NAMA_PESERTA']
+        fig_yearly = go.Figure(data=[go.Bar(
+            x=yearly_participants['YEAR'],
+            y=yearly_participants['NAMA_PESERTA'],
+            text=yearly_participants['NAMA_PESERTA'],
+            textposition='auto',
+            marker_color='#1f77b4'
+        )])
+        fig_yearly.update_layout(
+            title={'text':'Grafik Jumlah Peserta (unique)','x':0.5,'xanchor':'center'},
+            xaxis_title='Tahun',
+            yaxis_title='Jumlah',
+            template='plotly_white',
+            height=350,
+            width=430
+        )
+        st.plotly_chart(fig_yearly, use_container_width=False)
+
+    with chart_col2:
+        pie_data = df_summary.copy()
+        pie_data['UniqueValue'] = (
+            pie_data['Jumlah Peserta Pelatihan (unique)'].str.replace(' Orang', '', regex=False).replace('', '0').astype(int)
+        )
+        fig_pie = px.pie(
+            pie_data,
+            names='Jenjang',
+            values='UniqueValue',
+            title='Proporsi Jumlah Peserta (unique) per Jenjang',
+            hole=0.3
+        )
+        fig_pie.update_layout(
+            showlegend=True,
+            height=350,
+            width=430,
+            title={'text':'Proporsi Jumlah Peserta (unique) per Jenjang', 'x':0.5, 'xanchor':'center'}
+        )
+        st.plotly_chart(fig_pie, use_container_width=False)
 
     # New: Rekap by Jumlah Sekolah with cutoff note
     sekolah_data = {
@@ -315,7 +374,74 @@ def main_app():
     st.markdown('*Catatan: Data cutoff per 08 September 2025*')
     st.dataframe(df_sekolah)
 
-# Main logic
+    st.write("---")
+    st.header("Upload Data Terbaru")
+    upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
+    uploaded_file = st.file_uploader(
+        f"Upload file CSV atau Excel untuk pelatihan '{upload_category}' (format sesuai template)",
+        type=['csv', 'xlsx']
+    )
+    if uploaded_file is not None:
+        try:
+            if uploaded_file.name.endswith('.csv'):
+                new_data = pd.read_csv(uploaded_file, sep=';')
+            else:
+                new_data = pd.read_excel(uploaded_file)
+            st.write("Pratinjau data yang diunggah:")
+            st.dataframe(new_data)
+            expected_columns = df.columns.drop('CATEGORY', errors='ignore').tolist()
+            if not all(col in new_data.columns for col in expected_columns):
+                st.error(f"File unggahan kehilangan beberapa kolom wajib: {expected_columns}")
+            else:
+                for col in new_data.select_dtypes(include=['datetime64', 'datetimetz']).columns:
+                    new_data[col] = new_data[col].dt.strftime('%Y-%m-%d')
+                if st.button("Tambahkan data ke Google Sheet"):
+                    try:
+                        scopes = ['https://www.googleapis.com/auth/spreadsheets']
+                        creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
+                        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+                        client = gspread.authorize(creds)
+                        sheet = client.open_by_key(spreadsheet_id).worksheet(upload_category)
+                        existing_data = sheet.get_all_values()
+                        if len(existing_data) == 0:
+                            combined_data = [new_data.columns.values.tolist()] + new_data.values.tolist()
+                        else:
+                            existing_rows = existing_data[1:]
+                            existing_df = pd.DataFrame(existing_rows, columns=existing_data[0])
+                            combined_df = pd.concat([existing_df, new_data], ignore_index=True)
+                            combined_data = [combined_df.columns.values.tolist()] + combined_df.values.tolist()
+                        sheet.clear()
+                        sheet.update(combined_data)
+                        st.success(f"Data berhasil ditambahkan ke sheet '{upload_category}'!")
+                        load_data_from_gsheets.clear()
+                    except Exception as e:
+                        st.error(f"Gagal menambahkan data: {e}")
+        except Exception as e:
+            st.error(f"Gagal membaca file unggahan: {e}")
+
+    # Social media footer
+    st.markdown(
+        """
+        <hr>
+        <div style="text-align: center; margin-top: 20px;">
+            <a href="https://www.instagram.com/p4jakut_ks?igsh=c3Mya2dodm5hbHU1" target="_blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/instagrams.png" alt="Instagram" width="32" height="32" />
+                <div style="font-size: 0.7rem; margin-top: 4px;">Instagram P4 JUKS</div>
+            </a>
+            <a href="https://www.tiktok.com/@p4.juks?_t=ZS-8zKsAgWjXJQ&_r=1" target="_blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
+                <div style="font-size: 0.7rem; margin-top: 4px;">TikTok P4 JUKS</div>
+            </a>
+            <a href="https://youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="_blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
+                <div style="font-size: 0.7rem; margin-top: 4px;">YouTube P4 JUKS</div>
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+# Main flow control
 if st.session_state.page == "landing":
     show_landing_page()
 elif st.session_state.page == "main":
