@@ -36,11 +36,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Initialize session states
+# Initialize session states for page and login if not already
 if "page" not in st.session_state:
     st.session_state.page = "landing"
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+
+# Manage navigation without st.experimental_rerun by re-rendering based on session state
 
 def show_landing_page():
     st.title("SIPADU")
@@ -51,7 +53,7 @@ def show_landing_page():
     """, unsafe_allow_html=True)
     if st.button("Masuk ke Login"):
         st.session_state.page = "login"
-        st.experimental_rerun()
+        # Streamlit auto reruns on any widget interaction, so no explicit rerun needed
 
 def login():
     st.title("Data Peserta Pelatihan Tenaga Kependidikan")
@@ -62,7 +64,7 @@ def login():
         if (username == st.secrets["LOGIN_USERNAME"] and
             password == st.secrets["LOGIN_PASSWORD"]):
             st.session_state.logged_in = True
-            st.experimental_rerun()
+            st.session_state.page = "main"
         else:
             st.error("Invalid username or password")
 
@@ -77,7 +79,7 @@ def main_app():
     with colbtn1:
         if st.button("Refresh Data"):
             st.cache_data.clear()
-            st.experimental_rerun()
+            # No rerun called; Streamlit reruns automatically on button clicks
     with colbtn2:
         if st.button("Reset Filter"):
             filter_defaults = {
@@ -89,7 +91,6 @@ def main_app():
                 "date_range": []
             }
             reset_filters(filter_defaults)
-            st.experimental_rerun()
 
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
@@ -113,6 +114,7 @@ def main_app():
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
     spreadsheet_id = '1_YeSK2zgoExnC8n6tlmoJFQDVEWZbncdBLx8S5k-ljc'
     sheet_names = ['Tendik', 'Pendidik', 'Kejuruan']
+
     dfs = []
     for sheet_name in sheet_names:
         df_sheet = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
@@ -386,7 +388,7 @@ def main_app():
         unsafe_allow_html=True,
     )
 
-# Control page navigation
+# Main page control rendering
 if st.session_state.page == "landing":
     show_landing_page()
 elif st.session_state.page == "login":
@@ -394,3 +396,9 @@ elif st.session_state.page == "login":
         main_app()
     else:
         login()
+elif st.session_state.page == "main":
+    main_app()
+else:
+    # Fallback to landing page if state corrupted
+    st.session_state.page = "landing"
+    show_landing_page()
