@@ -133,6 +133,7 @@ def main_app():
                 "date_range": []
             }
             reset_filters(filter_defaults)
+
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
         scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly']
@@ -155,9 +156,11 @@ def main_app():
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
     spreadsheet_id = '1_YeSK2zgoExnC8n6tlmoJFQDVEWZbncdBLx8S5k-ljc'
     sheet_names = ['Tendik', 'Pendidik', 'Kejuruan']
+
     dfs = []
     for sheet_name in sheet_names:
         df_sheet = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
+        df_sheet['CATEGORY'] = sheet_name  # Add category column to distinguish
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
 
@@ -186,7 +189,7 @@ def main_app():
         with col4:
             pelatihan_filter = st.multiselect(
                 'PELATIHAN', 
-                df['PELATIHAN'].dropna().unique(), 
+                df['CATEGORY'].unique(), 
                 key="pelatihan_filter",
                 default=st.session_state.get("pelatihan_filter", []))
         with col5:
@@ -211,12 +214,13 @@ def main_app():
     if nama_pelatihan_filter:
         conditions.append(df['NAMA_PELATIHAN'].isin(nama_pelatihan_filter))
     if pelatihan_filter:
-        conditions.append(df['PELATIHAN'].isin(pelatihan_filter))
+        conditions.append(df['CATEGORY'].isin(pelatihan_filter))
     if status_sekolah_filter:
         conditions.append(df['STATUS_SEKOLAH'].isin(status_sekolah_filter))
     if len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
+
     if conditions:
         filter_condition = conditions[0]
         for cond in conditions[1:]:
@@ -225,7 +229,6 @@ def main_app():
         filter_condition = pd.Series([True] * len(df))
 
     filtered_df = df[filter_condition]
-
     if 'NO' in filtered_df.columns:
         filtered_df = filtered_df.drop(columns=['NO'])
     filtered_df = filtered_df.reset_index(drop=True)
@@ -242,14 +245,13 @@ def main_app():
         display_df = filtered_df
 
     st.write(f'Showing {display_df.shape[0]} records')
-
     view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
     if view_mode == 'Compact Table View':
         compact_cols = ['NAMA_PESERTA', 'NAMA_PELATIHAN', 'TANGGAL']
         display_df_view = display_df[compact_cols].copy()
     else:
         display_df_view = display_df.copy()
-    
+
     gb = GridOptionsBuilder.from_dataframe(display_df_view)
     gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
@@ -263,7 +265,6 @@ def main_app():
         fit_columns_on_grid_load=True,
         reload_data=True,
     )
-
     selected = grid_response['selected_rows']
     if selected is not None and len(selected) > 0:
         if isinstance(selected, pd.DataFrame):
@@ -281,12 +282,77 @@ def main_app():
         st.write(f"Jumlah pelatihan: {participant_trainings.shape[0]}")
 
     st.markdown('*Data cutoff: 08 September 2025*')
-
-    # Add horizontal separator before summary tables
     st.markdown('---')
 
-    # Summary by Jenjang (pelatihan peserta achievement)
-    targets = {
+    # Determine which CATEGORY is selected in pelatihan_filter
+    if pelatihan_filter and len(pelatihan_filter) == 1:
+        selected_category = pelatihan_filter[0]
+    else:
+        selected_category = None
+
+    # Define targets for jenjang and sekolah per category
+    targets_by_category = {
+        'Tendik': {
+            'jenjang': {
+                'DIKMAS': 284,
+                'PAUD': 2292,
+                'SD': 2556,
+                'SMP': 1500,
+                'SMA': 801,
+                'SMK': 636,
+            },
+            'sekolah': {
+                'PAUD': 855,
+                'DIKMAS': 149,
+                'SD': 424,
+                'SMP': 239,
+                'SMA': 111,
+                'SMK': 76,
+            },
+            'title_prefix': 'Tendik'
+        },
+        'Pendidik': {
+            'jenjang': {
+                'DIKMAS': 150,
+                'PAUD': 1000,
+                'SD': 1200,
+                'SMP': 900,
+                'SMA': 500,
+                'SMK': 450,
+            },
+            'sekolah': {
+                'PAUD': 400,
+                'DIKMAS': 80,
+                'SD': 350,
+                'SMP': 210,
+                'SMA': 90,
+                'SMK': 65,
+            },
+            'title_prefix': 'Pendidik'
+        },
+        'Kejuruan': {
+            'jenjang': {
+                'DIKMAS': 100,
+                'PAUD': 200,
+                'SD': 300,
+                'SMP': 400,
+                'SMA': 250,
+                'SMK': 180,
+            },
+            'sekolah': {
+                'PAUD': 100,
+                'DIKMAS': 60,
+                'SD': 120,
+                'SMP': 80,
+                'SMA': 40,
+                'SMK': 30,
+            },
+            'title_prefix': 'Kejuruan'
+        }
+    }
+
+    # Fallback targets if none selected or multiple categories filtered
+    default_jenjang_targets = {
         'DIKMAS': 284,
         'PAUD': 2292,
         'SD': 2556,
@@ -294,8 +360,28 @@ def main_app():
         'SMA': 801,
         'SMK': 636,
     }
+    default_sekolah_targets = {
+        'PAUD': 855,
+        'DIKMAS': 149,
+        'SD': 424,
+        'SMP': 239,
+        'SMA': 111,
+        'SMK': 76,
+    }
+    default_prefix = "Tendik"
+
+    if selected_category in targets_by_category:
+        jenjang_targets = targets_by_category[selected_category]['jenjang']
+        sekolah_targets = targets_by_category[selected_category]['sekolah']
+        prefix = targets_by_category[selected_category]['title_prefix']
+    else:
+        jenjang_targets = default_jenjang_targets
+        sekolah_targets = default_sekolah_targets
+        prefix = default_prefix
+
+    # Summary by Jenjang
     summary_rows = []
-    for jenjang, target in targets.items():
+    for jenjang, target in jenjang_targets.items():
         df_jenjang = filtered_df[
             (filtered_df['JENJANG'] == jenjang) &
             (filtered_df['NPSN'].notna()) &
@@ -316,11 +402,10 @@ def main_app():
     df_summary = df_summary[['Jenjang', 'Target Jumlah Peserta Pelatihan',
                              'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
 
-    st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang')
+    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
     st.dataframe(df_summary)
 
     chart_col1, chart_col2 = st.columns([1, 1])
-
     with chart_col1:
         yearly_participants = filtered_df.groupby(filtered_df['TANGGAL'].str[:4])['NAMA_PESERTA'].nunique().reset_index()
         yearly_participants.columns = ['YEAR', 'NAMA_PESERTA']
@@ -340,7 +425,6 @@ def main_app():
             width=430
         )
         st.plotly_chart(fig_yearly, use_container_width=False)
-
     with chart_col2:
         pie_data = df_summary.copy()
         pie_data['UniqueValue'] = (
@@ -361,17 +445,7 @@ def main_app():
         )
         st.plotly_chart(fig_pie, use_container_width=False)
 
-    # Rekap by Jumlah Sekolah with same column schema
-    sekolah_targets = {
-        'PAUD': 855,
-        'DIKMAS': 149,
-        'SD': 424,
-        'SMP': 239,
-        'SMA': 111,
-        'SMK': 76,
-    }
-
-    # Calculate unique schools per jenjang in filtered df
+    # Summary by Jumlah Sekolah
     sekolah_rows = []
     for jenjang, target in sekolah_targets.items():
         df_sekolah = filtered_df[
@@ -389,12 +463,11 @@ def main_app():
             'Persentase': f"{percent:.2f} %",
             'Kurang': f"{kurang:,} Sekolah"
         })
-
     df_sekolah = pd.DataFrame(sekolah_rows)
     df_sekolah.index = df_sekolah.index + 1
     df_sekolah = df_sekolah[['Jenjang', 'Target Jumlah Sekolah', 'Jumlah Sekolah (unique)', 'Persentase', 'Kurang']]
 
-    st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jumlah Sekolah')
+    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
     st.markdown('*Data cutoff: 08 September 2025*')
     st.dataframe(df_sekolah)
 
