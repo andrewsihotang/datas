@@ -88,8 +88,6 @@ P4_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/p4.pn
 
 if "page" not in st.session_state:
     st.session_state.page = "landing"
-if "category" not in st.session_state:
-    st.session_state.category = None
 
 def show_landing_page():
     st.markdown(
@@ -110,19 +108,8 @@ def show_landing_page():
     st.markdown('<div class="landing-centered-content">', unsafe_allow_html=True)
     st.title("SIPADU")
     st.subheader("Sistem Pangkalan Data Utama P4 Jakarta Utara dan Kepulauan Seribu")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("Pelatihan Tendik"):
-            st.session_state.page = "main"
-            st.session_state.category = "Tendik"
-    with col2:
-        if st.button("Pelatihan Pendidik"):
-            st.session_state.page = "main"
-            st.session_state.category = "Pendidik"
-    with col3:
-        if st.button("Pelatihan Kejuruan"):
-            st.session_state.page = "main"
-            st.session_state.category = "Kejuruan"
+    if st.button("Mulai"):
+        st.session_state.page = "main"
     st.markdown('</div>', unsafe_allow_html=True)
 
 def reset_filters(options_dict):
@@ -131,20 +118,21 @@ def reset_filters(options_dict):
 
 def main_app():
     st.markdown("<br>", unsafe_allow_html=True)
-
-    # Add button to go back to landing page
-    if st.button("Kembali ke Halaman Awal"):
-        st.session_state.page = "landing"
-        st.session_state.category = None
-        st.experimental_rerun()
-
-    # Check if category selected
-    if not st.session_state.category:
-        st.warning("Silakan pilih kategori pelatihan di halaman utama.")
-        return
-
-    selected_category = st.session_state.category
-
+    colbtn1, colbtn2, _ = st.columns([1, 1, 8])
+    with colbtn1:
+        if st.button("Refresh Data"):
+            st.cache_data.clear()
+    with colbtn2:
+        if st.button("Reset Filter"):
+            filter_defaults = {
+                "jenjang_filter": [],
+                "kecamatan_filter": [],
+                "nama_pelatihan_filter": [],
+                "pelatihan_filter": [],
+                "status_sekolah_filter": [],
+                "date_range": []
+            }
+            reset_filters(filter_defaults)
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
         scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly']
@@ -166,10 +154,14 @@ def main_app():
 
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
     spreadsheet_id = '1_YeSK2zgoExnC8n6tlmoJFQDVEWZbncdBLx8S5k-ljc'
+    sheet_names = ['Tendik', 'Pendidik', 'Kejuruan']
+    dfs = []
+    for sheet_name in sheet_names:
+        df_sheet = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
+        dfs.append(df_sheet)
+    df = pd.concat(dfs, ignore_index=True)
 
-    df = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, selected_category)
-
-    st.title(f'Data Peserta Pelatihan {selected_category} Tenaga Kependidikan')
+    st.title('Data Peserta Pelatihan Tenaga Kependidikan')
 
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
@@ -231,6 +223,7 @@ def main_app():
             filter_condition &= cond
     else:
         filter_condition = pd.Series([True] * len(df))
+
     filtered_df = df[filter_condition]
 
     if 'NO' in filtered_df.columns:
@@ -249,13 +242,14 @@ def main_app():
         display_df = filtered_df
 
     st.write(f'Showing {display_df.shape[0]} records')
+
     view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
     if view_mode == 'Compact Table View':
         compact_cols = ['NAMA_PESERTA', 'NAMA_PELATIHAN', 'TANGGAL']
         display_df_view = display_df[compact_cols].copy()
     else:
         display_df_view = display_df.copy()
-
+    
     gb = GridOptionsBuilder.from_dataframe(display_df_view)
     gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
@@ -269,6 +263,7 @@ def main_app():
         fit_columns_on_grid_load=True,
         reload_data=True,
     )
+
     selected = grid_response['selected_rows']
     if selected is not None and len(selected) > 0:
         if isinstance(selected, pd.DataFrame):
@@ -287,7 +282,9 @@ def main_app():
 
     st.markdown('*Data cutoff: 08 September 2025*')
 
+    # Add horizontal separator before summary tables
     st.markdown('---')
+
     # Summary by Jenjang (pelatihan peserta achievement)
     targets = {
         'DIKMAS': 284,
@@ -319,10 +316,11 @@ def main_app():
     df_summary = df_summary[['Jenjang', 'Target Jumlah Peserta Pelatihan',
                              'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
 
-    st.write(f'### Rekap Pencapaian Pelatihan {selected_category} berdasarkan Jenjang')
+    st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang')
     st.dataframe(df_summary)
 
     chart_col1, chart_col2 = st.columns([1, 1])
+
     with chart_col1:
         yearly_participants = filtered_df.groupby(filtered_df['TANGGAL'].str[:4])['NAMA_PESERTA'].nunique().reset_index()
         yearly_participants.columns = ['YEAR', 'NAMA_PESERTA']
@@ -342,6 +340,7 @@ def main_app():
             width=430
         )
         st.plotly_chart(fig_yearly, use_container_width=False)
+
     with chart_col2:
         pie_data = df_summary.copy()
         pie_data['UniqueValue'] = (
@@ -371,6 +370,7 @@ def main_app():
         'SMA': 111,
         'SMK': 76,
     }
+
     # Calculate unique schools per jenjang in filtered df
     sekolah_rows = []
     for jenjang, target in sekolah_targets.items():
@@ -389,17 +389,18 @@ def main_app():
             'Persentase': f"{percent:.2f} %",
             'Kurang': f"{kurang:,} Sekolah"
         })
+
     df_sekolah = pd.DataFrame(sekolah_rows)
     df_sekolah.index = df_sekolah.index + 1
     df_sekolah = df_sekolah[['Jenjang', 'Target Jumlah Sekolah', 'Jumlah Sekolah (unique)', 'Persentase', 'Kurang']]
 
-    st.write(f'### Rekap Pencapaian Pelatihan {selected_category} berdasarkan Jumlah Sekolah')
+    st.write('### Rekap Pencapaian Pelatihan Tendik berdasarkan Jumlah Sekolah')
     st.markdown('*Data cutoff: 08 September 2025*')
     st.dataframe(df_sekolah)
 
     st.write("---")
     st.header("Upload Data Terbaru")
-    upload_category = selected_category
+    upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
     uploaded_file = st.file_uploader(
         f"Upload file CSV atau Excel untuk pelatihan '{upload_category}' (format sesuai template)",
         type=['csv', 'xlsx']
