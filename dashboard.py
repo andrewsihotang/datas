@@ -108,6 +108,7 @@ def show_landing_page():
     st.markdown('<div class="landing-centered-content">', unsafe_allow_html=True)
     st.title("SIPADU")
     st.subheader("Sistem Pangkalan Data Utama P4 Jakarta Utara dan Kepulauan Seribu")
+    st.subheader("P4 Jakarta Utara dan Kepulauan Seribu")
     if st.button("Mulai"):
         st.session_state.page = "main"
     st.markdown('</div>', unsafe_allow_html=True)
@@ -546,3 +547,4 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
