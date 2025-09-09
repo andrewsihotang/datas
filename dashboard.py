@@ -221,7 +221,6 @@ def main_app():
     if len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
-
     if conditions:
         filter_condition = conditions[0]
         for cond in conditions[1:]:
@@ -230,6 +229,7 @@ def main_app():
         filter_condition = pd.Series([True] * len(df))
 
     filtered_df = df[filter_condition]
+
     if 'NO' in filtered_df.columns:
         filtered_df = filtered_df.drop(columns=['NO'])
     filtered_df = filtered_df.reset_index(drop=True)
@@ -246,6 +246,7 @@ def main_app():
         display_df = filtered_df
 
     st.write(f'Showing {display_df.shape[0]} records')
+
     view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
     if view_mode == 'Compact Table View':
         compact_cols = ['NAMA_PESERTA', 'NAMA_PELATIHAN', 'TANGGAL']
@@ -258,6 +259,7 @@ def main_app():
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     grid_options = gb.build()
+
     grid_response = AgGrid(
         display_df_view,
         gridOptions=grid_options,
@@ -266,6 +268,7 @@ def main_app():
         fit_columns_on_grid_load=True,
         reload_data=True,
     )
+
     selected = grid_response['selected_rows']
     if selected is not None and len(selected) > 0:
         if isinstance(selected, pd.DataFrame):
@@ -302,12 +305,13 @@ def main_app():
                 'SMA': 801,
                 'SMK': 636,
             },
+            # Updated targets as requested
             'sekolah': {
-                'PAUD': 855,
-                'DIKMAS': 149,
-                'SD': 424,
-                'SMP': 239,
-                'SMA': 111,
+                'PAUD': 44,
+                'DIKMAS': 60,
+                'SD': 350,
+                'SMP': 202,
+                'SMA': 95,
                 'SMK': 76,
             },
             'title_prefix': 'Tendik'
@@ -362,11 +366,11 @@ def main_app():
         'SMK': 636,
     }
     default_sekolah_targets = {
-        'PAUD': 855,
-        'DIKMAS': 149,
-        'SD': 424,
-        'SMP': 239,
-        'SMA': 111,
+        'PAUD': 44,
+        'DIKMAS': 60,
+        'SD': 350,
+        'SMP': 202,
+        'SMA': 95,
         'SMK': 76,
     }
     default_prefix = "Tendik"
@@ -402,7 +406,6 @@ def main_app():
     df_summary.index = df_summary.index + 1
     df_summary = df_summary[['Jenjang', 'Target Jumlah Peserta Pelatihan',
                              'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
-
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
     st.dataframe(df_summary)
 
@@ -426,6 +429,7 @@ def main_app():
             width=430
         )
         st.plotly_chart(fig_yearly, use_container_width=False)
+
     with chart_col2:
         pie_data = df_summary.copy()
         pie_data['UniqueValue'] = (
@@ -446,7 +450,7 @@ def main_app():
         )
         st.plotly_chart(fig_pie, use_container_width=False)
 
-    # Summary by Jumlah Sekolah
+    # Summary by Jumlah Sekolah with updated logic
     sekolah_rows = []
     for jenjang, target in sekolah_targets.items():
         df_sekolah = filtered_df[
@@ -455,15 +459,22 @@ def main_app():
             (filtered_df['ASAL_SEKOLAH'] != '')
         ]
         unique_sekolah_count = df_sekolah['ASAL_SEKOLAH'].nunique()
-        percent = (unique_sekolah_count / target * 100) if target else 0
+
+        # If unique count exceeds target, cap it to target
+        capped_count = unique_sekolah_count if unique_sekolah_count <= target else target
+
+        percent = (capped_count / target * 100) if target else 0
         kurang = max(0, target - unique_sekolah_count) if unique_sekolah_count < target else 0
+
         sekolah_rows.append({
             'Jenjang': jenjang,
             'Target Jumlah Sekolah': f"{target:,} Sekolah",
-            'Jumlah Sekolah (unique)': f"{unique_sekolah_count:,} Sekolah",
+            # Show capped count to keep max at target
+            'Jumlah Sekolah (unique)': f"{capped_count:,} Sekolah",
             'Persentase': f"{percent:.2f} %",
             'Kurang': f"{kurang:,} Sekolah"
         })
+
     df_sekolah = pd.DataFrame(sekolah_rows)
     df_sekolah.index = df_sekolah.index + 1
     df_sekolah = df_sekolah[['Jenjang', 'Target Jumlah Sekolah', 'Jumlah Sekolah (unique)', 'Persentase', 'Kurang']]
@@ -471,8 +482,8 @@ def main_app():
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
     st.markdown('*Data cutoff: 08 September 2025*')
     st.dataframe(df_sekolah)
-
     st.write("---")
+
     st.header("Upload Data Terbaru")
     upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
     uploaded_file = st.file_uploader(
@@ -485,8 +496,10 @@ def main_app():
                 new_data = pd.read_csv(uploaded_file, sep=';')
             else:
                 new_data = pd.read_excel(uploaded_file)
+
             st.write("Pratinjau data yang diunggah:")
             st.dataframe(new_data)
+
             expected_columns = df.columns.drop('CATEGORY', errors='ignore').tolist()
             if not all(col in new_data.columns for col in expected_columns):
                 st.error(f"File unggahan kehilangan beberapa kolom wajib: {expected_columns}")
@@ -500,6 +513,7 @@ def main_app():
                         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
                         client = gspread.authorize(creds)
                         sheet = client.open_by_key(spreadsheet_id).worksheet(upload_category)
+
                         existing_data = sheet.get_all_values()
                         if len(existing_data) == 0:
                             combined_data = [new_data.columns.values.tolist()] + new_data.values.tolist()
@@ -508,6 +522,7 @@ def main_app():
                             existing_df = pd.DataFrame(existing_rows, columns=existing_data[0])
                             combined_df = pd.concat([existing_df, new_data], ignore_index=True)
                             combined_data = [combined_df.columns.values.tolist()] + combined_df.values.tolist()
+
                         sheet.clear()
                         sheet.update(combined_data)
                         st.success(f"Data berhasil ditambahkan ke sheet '{upload_category}'!")
@@ -547,4 +562,3 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
-
