@@ -314,12 +314,12 @@ def main_app():
     targets_by_category = {
         'Tendik': {
             'jenjang': {
-                'DIKMAS': 284,
-                'PAUD': 2292,
-                'SD': 2556,
-                'SMP': 1500,
-                'SMA': 801,
-                'SMK': 636,
+                'DIKMAS': 85,
+                'PAUD': 76,
+                'SD': 1249,
+                'SMP': 945,
+                'SMA': 515,
+                'SMK': 461,
             },
             'sekolah': {
                 'PAUD': 44,
@@ -576,3 +576,4 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
