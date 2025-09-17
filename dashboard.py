@@ -7,7 +7,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import plotly.graph_objects as go
 import plotly.express as px
 
-# --- CSS for layout and header/logo tweaks ---
+# --- CSS for layout and header/logo tweaks, no tall vertical spacing ---
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main {
@@ -152,50 +152,64 @@ def main_app():
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
     spreadsheet_id = '1_YeSK2zgoExnC8n6tlmoJFQDVEWZbncdBLx8S5k-ljc'
     sheet_names = ['Tendik', 'Pendidik', 'Kejuruan']
-    dfs = [load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name) for sheet_name in sheet_names]
+    dfs = []
+    for sheet_name in sheet_names:
+        df_sheet = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
+        dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
+    
+    # Use the PELATIHAN column for all filtering and summaries
+    if "pelatihan_filter" in st.session_state and len(st.session_state.pelatihan_filter) == 1:
+        pelatihan_choice = st.session_state.pelatihan_filter[0]
+    else:
+        pelatihan_choice = None
+    title_map = {
+        'Tendik': 'Data Peserta Pelatihan Tenaga Kependidikan',
+        'Pendidik': 'Data Peserta Pelatihan Pendidik',
+        'Kejuruan': 'Data Peserta Pelatihan Kejuruan'
+    }
+    main_title = title_map.get(pelatihan_choice, 'Data Peserta Pelatihan Tenaga Kependidikan')
+    st.title(main_title)
 
-    # Filters for main table
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
         with col1:
             jenjang_filter = st.multiselect(
-                'JENJANG',
-                df['JENJANG'].dropna().unique(),
-                key="jenjang_filter",
+                'JENJANG', 
+                df['JENJANG'].dropna().unique(), 
+                key="jenjang_filter", 
                 default=st.session_state.get("jenjang_filter", []))
         with col2:
             kecamatan_filter = st.multiselect(
-                'KECAMATAN',
-                df['KECAMATAN'].dropna().unique(),
-                key="kecamatan_filter",
+                'KECAMATAN', 
+                df['KECAMATAN'].dropna().unique(), 
+                key="kecamatan_filter", 
                 default=st.session_state.get("kecamatan_filter", []))
         with col3:
             nama_pelatihan_filter = st.multiselect(
-                'NAMA PELATIHAN',
-                df['NAMA_PELATIHAN'].dropna().unique(),
-                key="nama_pelatihan_filter",
+                'NAMA PELATIHAN', 
+                df['NAMA_PELATIHAN'].dropna().unique(), 
+                key="nama_pelatihan_filter", 
                 default=st.session_state.get("nama_pelatihan_filter", []))
         with col4:
             pelatihan_filter = st.multiselect(
-                'PELATIHAN',
-                df['PELATIHAN'].dropna().unique(),
+                'PELATIHAN', 
+                df['PELATIHAN'].dropna().unique(), 
                 key="pelatihan_filter",
                 default=st.session_state.get("pelatihan_filter", []))
         with col5:
             status_options = df['STATUS_SEKOLAH'].dropna().unique() if 'STATUS_SEKOLAH' in df.columns else []
             status_sekolah_filter = st.multiselect(
-                'STATUS SEKOLAH',
-                status_options,
-                key="status_sekolah_filter",
+                'STATUS SEKOLAH', 
+                status_options, 
+                key="status_sekolah_filter", 
                 default=st.session_state.get("status_sekolah_filter", []))
         with col6:
             date_range = st.date_input(
-                'TANGGAL',
-                value=st.session_state.get("date_range", []),
+                'TANGGAL', 
+                value=st.session_state.get("date_range", []), 
                 key="date_range"
             )
-    # Filtering logic for main table
     conditions = []
     if jenjang_filter:
         conditions.append(df['JENJANG'].isin(jenjang_filter))
@@ -271,39 +285,87 @@ def main_app():
         st.write(f"Jumlah pelatihan: {participant_trainings.shape[0]}")
     st.markdown('*Data cutoff: 08 September 2025*')
     st.markdown('---')
-    
-    # Rekap: add STATUS_SEKOLAH filter for summary table!
-    st.subheader("Filter Rekap Berdasarkan Status Sekolah")
-    status_opts = filtered_df['STATUS_SEKOLAH'].dropna().unique().tolist()
-    if 'rekap_status_filter' not in st.session_state:
-        st.session_state.rekap_status_filter = status_opts
-    rekap_status_filter = st.multiselect("Status Sekolah untuk Rekap:", status_opts, default=status_opts, key="rekap_status_filter")
-
-    # Set up targets
+    # Determine which PELATIHAN is selected in pelatihan_filter
+    if pelatihan_filter and len(pelatihan_filter) == 1:
+        selected_category = pelatihan_filter[0]
+    else:
+        selected_category = None
     targets_by_category = {
         'Tendik': {
-            'jenjang': {'DIKMAS': 85, 'PAUD': 76, 'SD': 1249, 'SMP': 945, 'SMA': 515, 'SMK': 461},
-            'sekolah': {'PAUD': 44, 'DIKMAS': 60, 'SD': 350, 'SMP': 202, 'SMA': 95, 'SMK': 76},
+            'jenjang': {
+                'DIKMAS': 85,
+                'PAUD': 76,
+                'SD': 1249,
+                'SMP': 945,
+                'SMA': 515,
+                'SMK': 461,
+            },
+            'sekolah': {
+                'PAUD': 44,
+                'DIKMAS': 60,
+                'SD': 350,
+                'SMP': 202,
+                'SMA': 95,
+                'SMK': 76,
+            },
             'title_prefix': 'Tendik'
         },
         'Pendidik': {
-            'jenjang': {'DIKMAS': 150, 'PAUD': 1000, 'SD': 1200, 'SMP': 900, 'SMA': 500, 'SMK': 450},
-            'sekolah': {'PAUD': 400, 'DIKMAS': 80, 'SD': 350, 'SMP': 210, 'SMA': 90, 'SMK': 65},
+            'jenjang': {
+                'DIKMAS': 150,
+                'PAUD': 1000,
+                'SD': 1200,
+                'SMP': 900,
+                'SMA': 500,
+                'SMK': 450,
+            },
+            'sekolah': {
+                'PAUD': 400,
+                'DIKMAS': 80,
+                'SD': 350,
+                'SMP': 210,
+                'SMA': 90,
+                'SMK': 65,
+            },
             'title_prefix': 'Pendidik'
         },
         'Kejuruan': {
-            'jenjang': {'DIKMAS': 100, 'PAUD': 200, 'SD': 300, 'SMP': 400, 'SMA': 250, 'SMK': 180},
-            'sekolah': {'PAUD': 100, 'DIKMAS': 60, 'SD': 120, 'SMP': 80, 'SMA': 40, 'SMK': 30},
+            'jenjang': {
+                'DIKMAS': 100,
+                'PAUD': 200,
+                'SD': 300,
+                'SMP': 400,
+                'SMA': 250,
+                'SMK': 180,
+            },
+            'sekolah': {
+                'PAUD': 100,
+                'DIKMAS': 60,
+                'SD': 120,
+                'SMP': 80,
+                'SMA': 40,
+                'SMK': 30,
+            },
             'title_prefix': 'Kejuruan'
         }
     }
-    default_jenjang_targets = {'DIKMAS': 85, 'PAUD': 76, 'SD': 1249, 'SMP': 945, 'SMA': 515, 'SMK': 416}
-    default_sekolah_targets = {'PAUD': 44, 'DIKMAS': 60, 'SD': 350, 'SMP': 202, 'SMA': 95, 'SMK': 76}
+    default_jenjang_targets = {
+        'DIKMAS': 85,
+        'PAUD': 76,
+        'SD': 1249,
+        'SMP': 945,
+        'SMA': 515,
+        'SMK': 416,
+    }
+    default_sekolah_targets = {
+        'PAUD': 44,
+        'DIKMAS': 60,
+        'SD': 350,
+        'SMP': 202,
+        'SMA': 95,
+        'SMK': 76,
+    }
     default_prefix = "Tendik"
-    if "pelatihan_filter" in st.session_state and len(st.session_state.pelatihan_filter) == 1:
-        selected_category = st.session_state.pelatihan_filter[0]
-    else:
-        selected_category = None
     if selected_category in targets_by_category:
         jenjang_targets = targets_by_category[selected_category]['jenjang']
         sekolah_targets = targets_by_category[selected_category]['sekolah']
@@ -312,15 +374,13 @@ def main_app():
         jenjang_targets = default_jenjang_targets
         sekolah_targets = default_sekolah_targets
         prefix = default_prefix
-
-    # Summary by Jenjang - filter applied!
+    # Summary by Jenjang
     summary_rows = []
     for jenjang, target in jenjang_targets.items():
         df_jenjang = filtered_df[
             (filtered_df['JENJANG'] == jenjang) &
             (filtered_df['NPSN'].notna()) &
-            (filtered_df['NPSN'].astype(str) != '0') &
-            (filtered_df['STATUS_SEKOLAH'].isin(rekap_status_filter))
+            (filtered_df['NPSN'].astype(str) != '0')
         ]
         unique_count = df_jenjang['NAMA_PESERTA'].nunique()
         percent = (unique_count / target * 100) if target else 0
@@ -336,9 +396,8 @@ def main_app():
     df_summary.index = df_summary.index + 1
     df_summary = df_summary[['Jenjang', 'Target Jumlah Peserta Pelatihan',
                              'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
-    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang (Filtered by Status Sekolah)')
+    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
     st.dataframe(df_summary)
-
     chart_col1, chart_col2 = st.columns([1, 1])
     with chart_col1:
         yearly_participants = filtered_df.groupby(filtered_df['TANGGAL'].str[:4])['NAMA_PESERTA'].nunique().reset_index()
@@ -467,7 +526,7 @@ def main_app():
         """,
         unsafe_allow_html=True,
     )
-
+# Main flow control
 if st.session_state.page == "landing":
     show_landing_page()
 elif st.session_state.page == "main":
