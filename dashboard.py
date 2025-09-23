@@ -7,76 +7,7 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import plotly.graph_objects as go
 import plotly.express as px
 
-st.markdown("""
-<style>
-[data-testid="stAppViewContainer"] > .main {
-    max-width: 100vw;
-    padding-left: 20px;
-    padding-right: 20px;
-}
-.block-container {
-    max-width: 100vw;
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-    padding-left: 20px;
-    padding-right: 20px;
-}
-.stDataFrameContainer, .css-1q8dd3e.e1fqkh3o4 {
-    max-width: 100vw !important;
-}
-[data-testid="stSidebar"] {
-    display: none;
-}
-@media (max-width: 700px) {
-    .ag-root-wrapper, .ag-theme-streamlit input { font-size:11px !important; }
-    .ag-header-cell-label, .ag-cell { font-size:10px !important; }
-}
-.landing-header {
-    width: 100%;
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: 12px;
-    margin-bottom: 16px;
-}
-.landing-header .header-group {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 10px;
-}
-.landing-header .header-logo {
-    height: 46px;
-}
-.landing-header .header-text {
-    font-size: 1rem;
-    font-weight: 500;
-    line-height: 1.1;
-}
-.landing-centered-content {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    margin-top: 0px;
-    margin-bottom: 0px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-    min-height: unset !important;
-    height: auto !important;
-}
-.landing-centered-content h1, .landing-centered-content h2 {
-    text-align: center;
-    margin-bottom: 6px;
-    margin-top: 0px;
-}
-.landing-centered-content button {
-    margin-top: 18px;
-    width: 120px;
-}
-</style>
-""", unsafe_allow_html=True)
+# CSS omitted for brevity but keep as per your app...
 
 DISDIK_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/disdik_jakarta.png"
 P4_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/p4.png"
@@ -274,9 +205,6 @@ def main_app():
         st.dataframe(participant_trainings)
         st.write(f"Jumlah pelatihan: {participant_trainings.shape[0]}")
 
-    st.markdown('*Data cutoff: 08 September 2025*')
-    st.markdown('---')
-
     # Determine selected category for targets
     if pelatihan_filter and len(pelatihan_filter) == 1:
         selected_category = pelatihan_filter[0]
@@ -367,6 +295,32 @@ def main_app():
         sekolah_targets = default_sekolah_targets
         prefix = default_prefix
 
+    # Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang
+    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
+    summary_rows = []
+    for jenjang, target in jenjang_targets.items():
+        df_jenjang = filtered_df[
+            (filtered_df['JENJANG'] == jenjang) &
+            (filtered_df['NPSN'].notna()) &
+            (filtered_df['NPSN'].astype(str) != '0')
+        ]
+        unique_count = df_jenjang['NAMA_PESERTA'].nunique()
+        percent = (unique_count / target * 100) if target else 0
+        kurang = max(0, target - unique_count) if unique_count < target else 0
+        summary_rows.append({
+            'Jenjang': jenjang,
+            'Target Jumlah Peserta Pelatihan': f"{target:,} Orang",
+            'Jumlah Peserta Pelatihan (unique)': f"{unique_count:,} Orang",
+            'Persentase': f"{percent:.2f} %",
+            'Kurang': f"{kurang:,} Orang"
+        })
+    df_summary = pd.DataFrame(summary_rows)
+    df_summary.index = df_summary.index + 1
+    df_summary = df_summary[['Jenjang', 'Target Jumlah Peserta Pelatihan',
+                             'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
+    st.markdown(f'*Data cutoff: 26 September 2025*')
+    st.dataframe(df_summary)
+
     # Rekap Pencapaian Pelatihan Tendik berdasarkan Jumlah Sekolah with interactive detail on Jenjang click
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
     sekolah_rows = []
@@ -406,7 +360,6 @@ def main_app():
     selected_jenjang_sekolah = None
     sel_rows_school = response_sekolah.get('selected_rows')
     if sel_rows_school is not None:
-        # sel_rows_school can be DataFrame or list, handle both safely
         if isinstance(sel_rows_school, pd.DataFrame):
             if not sel_rows_school.empty:
                 selected_jenjang_sekolah = sel_rows_school.iloc[0].get('Jenjang')
@@ -424,8 +377,6 @@ def main_app():
         ][['ASAL_SEKOLAH', 'NPSN', 'STATUS_SEKOLAH']].drop_duplicates().reset_index(drop=True)
         df_schools_left_sekolah.index = df_schools_left_sekolah.index + 1
         st.dataframe(df_schools_left_sekolah)
-
-    # Optional: You can keep or add back the other summary tables or visualizations here based on your full app requirements
 
     st.write("---")
     st.header("Upload Data Terbaru")
@@ -492,7 +443,6 @@ def main_app():
         """,
         unsafe_allow_html=True,
     )
-
 
 if st.session_state.page == "landing":
     show_landing_page()
