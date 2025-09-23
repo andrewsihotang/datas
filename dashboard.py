@@ -159,19 +159,7 @@ def main_app():
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
 
-    # Use the PELATIHAN column for all filtering and summaries
-    if "pelatihan_filter" in st.session_state and len(st.session_state.pelatihan_filter) == 1:
-        pelatihan_choice = st.session_state.pelatihan_filter[0]
-    else:
-        pelatihan_choice = None
-    title_map = {
-        'Tendik': 'Data Peserta Pelatihan Tenaga Kependidikan',
-        'Pendidik': 'Data Peserta Pelatihan Pendidik',
-        'Kejuruan': 'Data Peserta Pelatihan Kejuruan'
-    }
-    main_title = title_map.get(pelatihan_choice, 'Data Peserta Pelatihan Tenaga Kependidikan')
-    st.title(main_title)
-
+    # Filtering UI
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
         with col1:
@@ -232,13 +220,13 @@ def main_app():
     else:
         filter_condition = pd.Series([True] * len(df))
     filtered_df = df[filter_condition]
-    # Remove NO column if it exists before inserting new one
+
+    # Prepare filtered_df for display
     if "NO" in filtered_df.columns:
         filtered_df = filtered_df.drop(columns=["NO"])
     filtered_df = filtered_df.reset_index(drop=True)
     filtered_df.insert(0, "NO", range(1, len(filtered_df) + 1))
     filtered_df['TANGGAL'] = filtered_df['TANGGAL'].dt.strftime('%Y-%m-%d')
-    # Remove the CATEGORY column if it exists
     if 'CATEGORY' in filtered_df.columns:
         filtered_df = filtered_df.drop(columns=['CATEGORY'])
     cols = list(filtered_df.columns)
@@ -288,7 +276,7 @@ def main_app():
     st.markdown('*Data cutoff: 08 September 2025*')
     st.markdown('---')
 
-    # Determine which PELATIHAN is selected in pelatihan_filter
+    # Determine selected category for targets
     if pelatihan_filter and len(pelatihan_filter) == 1:
         selected_category = pelatihan_filter[0]
     else:
@@ -378,101 +366,7 @@ def main_app():
         sekolah_targets = default_sekolah_targets
         prefix = default_prefix
 
-    # Summary by Jenjang plus interactivity
-    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
-    summary_rows = []
-    for jenjang, target in jenjang_targets.items():
-        df_jenjang = filtered_df[
-            (filtered_df['JENJANG'] == jenjang) &
-            (filtered_df['NPSN'].notna()) &
-            (filtered_df['NPSN'].astype(str) != '0')
-        ]
-        unique_count = df_jenjang['NAMA_PESERTA'].nunique()
-        percent = (unique_count / target * 100) if target else 0
-        kurang = max(0, target - unique_count) if unique_count < target else 0
-        summary_rows.append({
-            'Jenjang': jenjang,
-            'Target Jumlah Peserta Pelatihan': f"{target:,} Orang",
-            'Jumlah Peserta Pelatihan (unique)': f"{unique_count:,} Orang",
-            'Persentase': f"{percent:.2f} %",
-            'Kurang': f"{kurang:,} Orang"
-        })
-    df_summary = pd.DataFrame(summary_rows)
-    df_summary.index = df_summary.index + 1
-    df_summary = df_summary[['Jenjang', 'Target Jumlah Peserta Pelatihan',
-                             'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
-    
-    # Display with AgGrid
-    gb_summary = GridOptionsBuilder.from_dataframe(df_summary)
-    gb_summary.configure_selection(selection_mode="single", use_checkbox=False)
-    grid_options_summary = gb_summary.build()
-    response_summary = AgGrid(
-        df_summary,
-        gridOptions=grid_options_summary,
-        update_mode=GridUpdateMode.SELECTION_CHANGED,
-        fit_columns_on_grid_load=True,
-        height=300,
-        reload_data=True
-    )
-    selected_jenjang_summary = None
-    sel_rows = response_summary['selected_rows']
-    if sel_rows and len(sel_rows) > 0:
-        selected_jenjang_summary = sel_rows[0].get('Jenjang')
-
-    st.markdown(f'*Data cutoff: 26 September 2025*')
-
-    chart_col1, chart_col2 = st.columns([1, 1])
-    with chart_col1:
-        yearly_participants = filtered_df.groupby(filtered_df['TANGGAL'].str[:4])['NAMA_PESERTA'].nunique().reset_index()
-        yearly_participants.columns = ['YEAR', 'NAMA_PESERTA']
-        fig_yearly = go.Figure(data=[go.Bar(
-            x=yearly_participants['YEAR'],
-            y=yearly_participants['NAMA_PESERTA'],
-            text=yearly_participants['NAMA_PESERTA'],
-            textposition='auto',
-            marker_color='#1f77b4'
-        )])
-        fig_yearly.update_layout(
-            title={'text':'Grafik Jumlah Peserta (unique)','x':0.5,'xanchor':'center'},
-            xaxis_title='Tahun',
-            yaxis_title='Jumlah',
-            template='plotly_white',
-            height=350,
-            width=430
-        )
-        st.plotly_chart(fig_yearly, use_container_width=False)
-    with chart_col2:
-        pie_data = df_summary.copy()
-        pie_data['UniqueValue'] = (
-            pie_data['Jumlah Peserta Pelatihan (unique)'].str.replace(' Orang', '', regex=False).replace('', '0').astype(int)
-        )
-        fig_pie = px.pie(
-            pie_data,
-            names='Jenjang',
-            values='UniqueValue',
-            title='Proporsi Jumlah Peserta (unique) per Jenjang',
-            hole=0.3
-        )
-        fig_pie.update_layout(
-            showlegend=True,
-            height=350,
-            width=430,
-            title={'text':'Proporsi Jumlah Peserta (unique) per Jenjang', 'x':0.5, 'xanchor':'center'}
-        )
-        st.plotly_chart(fig_pie, use_container_width=False)
-
-    # Show sekolah details upon clicking a Jenjang in Jenjang summary
-    if selected_jenjang_summary:
-        st.markdown(f"#### Detail Sekolah untuk Jenjang: **{selected_jenjang_summary}** (dari Rekap Jenjang)")
-        df_schools_left = filtered_df[
-            (filtered_df['JENJANG'] == selected_jenjang_summary) &
-            (filtered_df['ASAL_SEKOLAH'].notna()) &
-            (filtered_df['ASAL_SEKOLAH'] != '')
-        ][['ASAL_SEKOLAH', 'NPSN', 'STATUS_SEKOLAH']].drop_duplicates().reset_index(drop=True)
-        df_schools_left.index = df_schools_left.index + 1
-        st.dataframe(df_schools_left)
-
-    # Summary by Jumlah Sekolah plus interactivity
+    # Rekap Pencapaian Pelatihan Tendik berdasarkan Jumlah Sekolah with interactive detail on Jenjang click
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
     sekolah_rows = []
     for jenjang, target in sekolah_targets.items():
@@ -499,6 +393,7 @@ def main_app():
     gb_sekolah = GridOptionsBuilder.from_dataframe(df_sekolah)
     gb_sekolah.configure_selection(selection_mode="single", use_checkbox=False)
     grid_options_sekolah = gb_sekolah.build()
+
     response_sekolah = AgGrid(
         df_sekolah,
         gridOptions=grid_options_sekolah,
@@ -508,15 +403,14 @@ def main_app():
         reload_data=True,
     )
     selected_jenjang_sekolah = None
-    sel_rows_school = response_sekolah['selected_rows']
-    if sel_rows_school and len(sel_rows_school) > 0:
+    sel_rows_school = response_sekolah.get('selected_rows', [])
+    if sel_rows_school and isinstance(sel_rows_school, list) and len(sel_rows_school) > 0:
         selected_jenjang_sekolah = sel_rows_school[0].get('Jenjang')
 
     st.markdown(f'*Data cutoff: 26 September 2025*')
 
-    # Show sekolah details upon clicking a Jenjang in Sekolah summary
     if selected_jenjang_sekolah:
-        st.markdown(f"#### Detail Sekolah untuk Jenjang: **{selected_jenjang_sekolah}** (dari Rekap Jumlah Sekolah)")
+        st.markdown(f"#### Detail Sekolah untuk Jenjang: **{selected_jenjang_sekolah}**")
         df_schools_left_sekolah = filtered_df[
             (filtered_df['JENJANG'] == selected_jenjang_sekolah) &
             (filtered_df['ASAL_SEKOLAH'].notna()) &
