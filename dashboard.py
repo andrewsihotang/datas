@@ -7,7 +7,77 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import plotly.graph_objects as go
 import plotly.express as px
 
-# CSS omitted for brevity but keep as per your app...
+# --- CSS for layout and header/logo tweaks, no tall vertical spacing ---
+st.markdown("""
+<style>
+[data-testid="stAppViewContainer"] > .main {
+    max-width: 100vw;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+.block-container {
+    max-width: 100vw;
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+.stDataFrameContainer, .css-1q8dd3e.e1fqkh3o4 {
+    max-width: 100vw !important;
+}
+[data-testid="stSidebar"] {
+    display: none;
+}
+@media (max-width: 700px) {
+    .ag-root-wrapper, .ag-theme-streamlit input { font-size:11px !important; }
+    .ag-header-cell-label, .ag-cell { font-size:10px !important; }
+}
+.landing-header {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 12px;
+    margin-bottom: 16px;
+}
+.landing-header .header-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+.landing-header .header-logo {
+    height: 46px;
+}
+.landing-header .header-text {
+    font-size: 1rem;
+    font-weight: 500;
+    line-height: 1.1;
+}
+.landing-centered-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    margin-top: 0px;
+    margin-bottom: 0px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    min-height: unset !important;
+    height: auto !important;
+}
+.landing-centered-content h1, .landing-centered-content h2 {
+    text-align: center;
+    margin-bottom: 6px;
+    margin-top: 0px;
+}
+.landing-centered-content button {
+    margin-top: 18px;
+    width: 120px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 DISDIK_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/disdik_jakarta.png"
 P4_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/p4.png"
@@ -60,7 +130,6 @@ def main_app():
                 "date_range": []
             }
             reset_filters(filter_defaults)
-
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
         scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly']
@@ -88,45 +157,57 @@ def main_app():
         df_sheet = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
+    
+    # Use the PELATIHAN column for all filtering and summaries
+    if "pelatihan_filter" in st.session_state and len(st.session_state.pelatihan_filter) == 1:
+        pelatihan_choice = st.session_state.pelatihan_filter[0]
+    else:
+        pelatihan_choice = None
+    title_map = {
+        'Tendik': 'Data Peserta Pelatihan Tenaga Kependidikan',
+        'Pendidik': 'Data Peserta Pelatihan Pendidik',
+        'Kejuruan': 'Data Peserta Pelatihan Kejuruan'
+    }
+    main_title = title_map.get(pelatihan_choice, 'Data Peserta Pelatihan Tenaga Kependidikan')
+    st.title(main_title)
 
-    # Filters UI
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
         with col1:
             jenjang_filter = st.multiselect(
-                'JENJANG',
-                df['JENJANG'].dropna().unique(),
-                key="jenjang_filter",
+                'JENJANG', 
+                df['JENJANG'].dropna().unique(), 
+                key="jenjang_filter", 
                 default=st.session_state.get("jenjang_filter", []))
         with col2:
             kecamatan_filter = st.multiselect(
-                'KECAMATAN',
-                df['KECAMATAN'].dropna().unique(),
-                key="kecamatan_filter",
+                'KECAMATAN', 
+                df['KECAMATAN'].dropna().unique(), 
+                key="kecamatan_filter", 
                 default=st.session_state.get("kecamatan_filter", []))
         with col3:
             nama_pelatihan_filter = st.multiselect(
-                'NAMA PELATIHAN',
-                df['NAMA_PELATIHAN'].dropna().unique(),
-                key="nama_pelatihan_filter",
+                'NAMA PELATIHAN', 
+                df['NAMA_PELATIHAN'].dropna().unique(), 
+                key="nama_pelatihan_filter", 
                 default=st.session_state.get("nama_pelatihan_filter", []))
         with col4:
             pelatihan_filter = st.multiselect(
-                'PELATIHAN',
-                df['PELATIHAN'].dropna().unique(),
+                'PELATIHAN', 
+                df['PELATIHAN'].dropna().unique(), 
                 key="pelatihan_filter",
                 default=st.session_state.get("pelatihan_filter", []))
         with col5:
             status_options = df['STATUS_SEKOLAH'].dropna().unique() if 'STATUS_SEKOLAH' in df.columns else []
             status_sekolah_filter = st.multiselect(
-                'STATUS SEKOLAH',
-                status_options,
-                key="status_sekolah_filter",
+                'STATUS SEKOLAH', 
+                status_options, 
+                key="status_sekolah_filter", 
                 default=st.session_state.get("status_sekolah_filter", []))
         with col6:
             date_range = st.date_input(
-                'TANGGAL',
-                value=st.session_state.get("date_range", []),
+                'TANGGAL', 
+                value=st.session_state.get("date_range", []), 
                 key="date_range"
             )
     conditions = []
@@ -150,13 +231,13 @@ def main_app():
     else:
         filter_condition = pd.Series([True] * len(df))
     filtered_df = df[filter_condition]
-
-    # Prepare filtered_df for display
+    # Remove NO column if it exists before inserting new one
     if "NO" in filtered_df.columns:
         filtered_df = filtered_df.drop(columns=["NO"])
     filtered_df = filtered_df.reset_index(drop=True)
     filtered_df.insert(0, "NO", range(1, len(filtered_df) + 1))
     filtered_df['TANGGAL'] = filtered_df['TANGGAL'].dt.strftime('%Y-%m-%d')
+    # Remove the CATEGORY column if it exists
     if 'CATEGORY' in filtered_df.columns:
         filtered_df = filtered_df.drop(columns=['CATEGORY'])
     cols = list(filtered_df.columns)
@@ -167,7 +248,6 @@ def main_app():
         display_df = filtered_df[cols]
     else:
         display_df = filtered_df
-
     st.write(f'Showing {display_df.shape[0]} records')
     view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
     if view_mode == 'Compact Table View':
@@ -175,7 +255,6 @@ def main_app():
         display_df_view = display_df[compact_cols].copy()
     else:
         display_df_view = display_df.copy()
-
     gb = GridOptionsBuilder.from_dataframe(display_df_view)
     gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
@@ -204,8 +283,9 @@ def main_app():
         participant_trainings.index = participant_trainings.index + 1
         st.dataframe(participant_trainings)
         st.write(f"Jumlah pelatihan: {participant_trainings.shape[0]}")
-
-    # Determine selected category for targets
+    st.markdown('*Data cutoff: 08 September 2025*')
+    st.markdown('---')
+    # Determine which PELATIHAN is selected in pelatihan_filter
     if pelatihan_filter and len(pelatihan_filter) == 1:
         selected_category = pelatihan_filter[0]
     else:
@@ -294,9 +374,7 @@ def main_app():
         jenjang_targets = default_jenjang_targets
         sekolah_targets = default_sekolah_targets
         prefix = default_prefix
-
-    # Rekap Pencapaian Pelatihan Tendik berdasarkan Jenjang
-    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
+    # Summary by Jenjang
     summary_rows = []
     for jenjang, target in jenjang_targets.items():
         df_jenjang = filtered_df[
@@ -318,11 +396,48 @@ def main_app():
     df_summary.index = df_summary.index + 1
     df_summary = df_summary[['Jenjang', 'Target Jumlah Peserta Pelatihan',
                              'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
-    st.markdown(f'*Data cutoff: 26 September 2025*')
+    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
     st.dataframe(df_summary)
-
-    # Rekap Pencapaian Pelatihan Tendik berdasarkan Jumlah Sekolah with interactive detail on Jenjang click
-    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
+    chart_col1, chart_col2 = st.columns([1, 1])
+    with chart_col1:
+        yearly_participants = filtered_df.groupby(filtered_df['TANGGAL'].str[:4])['NAMA_PESERTA'].nunique().reset_index()
+        yearly_participants.columns = ['YEAR', 'NAMA_PESERTA']
+        fig_yearly = go.Figure(data=[go.Bar(
+            x=yearly_participants['YEAR'],
+            y=yearly_participants['NAMA_PESERTA'],
+            text=yearly_participants['NAMA_PESERTA'],
+            textposition='auto',
+            marker_color='#1f77b4'
+        )])
+        fig_yearly.update_layout(
+            title={'text':'Grafik Jumlah Peserta (unique)','x':0.5,'xanchor':'center'},
+            xaxis_title='Tahun',
+            yaxis_title='Jumlah',
+            template='plotly_white',
+            height=350,
+            width=430
+        )
+        st.plotly_chart(fig_yearly, use_container_width=False)
+    with chart_col2:
+        pie_data = df_summary.copy()
+        pie_data['UniqueValue'] = (
+            pie_data['Jumlah Peserta Pelatihan (unique)'].str.replace(' Orang', '', regex=False).replace('', '0').astype(int)
+        )
+        fig_pie = px.pie(
+            pie_data,
+            names='Jenjang',
+            values='UniqueValue',
+            title='Proporsi Jumlah Peserta (unique) per Jenjang',
+            hole=0.3
+        )
+        fig_pie.update_layout(
+            showlegend=True,
+            height=350,
+            width=430,
+            title={'text':'Proporsi Jumlah Peserta (unique) per Jenjang', 'x':0.5, 'xanchor':'center'}
+        )
+        st.plotly_chart(fig_pie, use_container_width=False)
+    # Summary by Jumlah Sekolah with updated logic for capping percentage and count
     sekolah_rows = []
     for jenjang, target in sekolah_targets.items():
         df_sekolah = filtered_df[
@@ -344,40 +459,9 @@ def main_app():
     df_sekolah = pd.DataFrame(sekolah_rows)
     df_sekolah.index = df_sekolah.index + 1
     df_sekolah = df_sekolah[['Jenjang', 'Target Jumlah Sekolah', 'Jumlah Sekolah (unique)', 'Persentase', 'Kurang']]
-
-    gb_sekolah = GridOptionsBuilder.from_dataframe(df_sekolah)
-    gb_sekolah.configure_selection(selection_mode="single", use_checkbox=False)
-    grid_options_sekolah = gb_sekolah.build()
-
-    response_sekolah = AgGrid(
-        df_sekolah,
-        gridOptions=grid_options_sekolah,
-        update_mode=GridUpdateMode.SELECTION_CHANGED,
-        fit_columns_on_grid_load=True,
-        height=300,
-        reload_data=True,
-    )
-    selected_jenjang_sekolah = None
-    sel_rows_school = response_sekolah.get('selected_rows')
-    if sel_rows_school is not None:
-        if isinstance(sel_rows_school, pd.DataFrame):
-            if not sel_rows_school.empty:
-                selected_jenjang_sekolah = sel_rows_school.iloc[0].get('Jenjang')
-        elif isinstance(sel_rows_school, list) and len(sel_rows_school) > 0:
-            selected_jenjang_sekolah = sel_rows_school[0].get('Jenjang')
-
-    st.markdown(f'*Data cutoff: 26 September 2025*')
-
-    if selected_jenjang_sekolah:
-        st.markdown(f"#### Detail Sekolah untuk Jenjang: **{selected_jenjang_sekolah}**")
-        df_schools_left_sekolah = filtered_df[
-            (filtered_df['JENJANG'] == selected_jenjang_sekolah) &
-            (filtered_df['ASAL_SEKOLAH'].notna()) &
-            (filtered_df['ASAL_SEKOLAH'] != '')
-        ][['ASAL_SEKOLAH', 'NPSN', 'STATUS_SEKOLAH']].drop_duplicates().reset_index(drop=True)
-        df_schools_left_sekolah.index = df_schools_left_sekolah.index + 1
-        st.dataframe(df_schools_left_sekolah)
-
+    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
+    st.markdown('*Data cutoff: 08 September 2025*')
+    st.dataframe(df_sekolah)
     st.write("---")
     st.header("Upload Data Terbaru")
     upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
@@ -422,7 +506,6 @@ def main_app():
                         st.error(f"Gagal menambahkan data: {e}")
         except Exception as e:
             st.error(f"Gagal membaca file unggahan: {e}")
-
     st.markdown(
         """
         <hr>
@@ -443,7 +526,7 @@ def main_app():
         """,
         unsafe_allow_html=True,
     )
-
+# Main flow control
 if st.session_state.page == "landing":
     show_landing_page()
 elif st.session_state.page == "main":
