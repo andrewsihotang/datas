@@ -130,6 +130,7 @@ def main_app():
                 "date_range": []
             }
             reset_filters(filter_defaults)
+
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
         scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly']
@@ -157,7 +158,7 @@ def main_app():
         df_sheet = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
-    
+
     # Use the PELATIHAN column for all filtering and summaries
     if "pelatihan_filter" in st.session_state and len(st.session_state.pelatihan_filter) == 1:
         pelatihan_choice = st.session_state.pelatihan_filter[0]
@@ -283,8 +284,10 @@ def main_app():
         participant_trainings.index = participant_trainings.index + 1
         st.dataframe(participant_trainings)
         st.write(f"Jumlah pelatihan: {participant_trainings.shape[0]}")
+
     st.markdown('*Data cutoff: 08 September 2025*')
     st.markdown('---')
+
     # Determine which PELATIHAN is selected in pelatihan_filter
     if pelatihan_filter and len(pelatihan_filter) == 1:
         selected_category = pelatihan_filter[0]
@@ -374,7 +377,9 @@ def main_app():
         jenjang_targets = default_jenjang_targets
         sekolah_targets = default_sekolah_targets
         prefix = default_prefix
-    # Summary by Jenjang
+
+    # Summary by Jenjang plus interactivity
+    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
     summary_rows = []
     for jenjang, target in jenjang_targets.items():
         df_jenjang = filtered_df[
@@ -396,8 +401,26 @@ def main_app():
     df_summary.index = df_summary.index + 1
     df_summary = df_summary[['Jenjang', 'Target Jumlah Peserta Pelatihan',
                              'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
-    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
-    st.dataframe(df_summary)
+    
+    # Display with AgGrid
+    gb_summary = GridOptionsBuilder.from_dataframe(df_summary)
+    gb_summary.configure_selection(selection_mode="single", use_checkbox=False)
+    grid_options_summary = gb_summary.build()
+    response_summary = AgGrid(
+        df_summary,
+        gridOptions=grid_options_summary,
+        update_mode=GridUpdateMode.SELECTION_CHANGED,
+        fit_columns_on_grid_load=True,
+        height=300,
+        reload_data=True
+    )
+    selected_jenjang_summary = None
+    sel_rows = response_summary['selected_rows']
+    if sel_rows and len(sel_rows) > 0:
+        selected_jenjang_summary = sel_rows[0].get('Jenjang')
+
+    st.markdown(f'*Data cutoff: 26 September 2025*')
+
     chart_col1, chart_col2 = st.columns([1, 1])
     with chart_col1:
         yearly_participants = filtered_df.groupby(filtered_df['TANGGAL'].str[:4])['NAMA_PESERTA'].nunique().reset_index()
@@ -437,7 +460,20 @@ def main_app():
             title={'text':'Proporsi Jumlah Peserta (unique) per Jenjang', 'x':0.5, 'xanchor':'center'}
         )
         st.plotly_chart(fig_pie, use_container_width=False)
-    # Summary by Jumlah Sekolah with updated logic for capping percentage and count
+
+    # Show sekolah details upon clicking a Jenjang in Jenjang summary
+    if selected_jenjang_summary:
+        st.markdown(f"#### Detail Sekolah untuk Jenjang: **{selected_jenjang_summary}** (dari Rekap Jenjang)")
+        df_schools_left = filtered_df[
+            (filtered_df['JENJANG'] == selected_jenjang_summary) &
+            (filtered_df['ASAL_SEKOLAH'].notna()) &
+            (filtered_df['ASAL_SEKOLAH'] != '')
+        ][['ASAL_SEKOLAH', 'NPSN', 'STATUS_SEKOLAH']].drop_duplicates().reset_index(drop=True)
+        df_schools_left.index = df_schools_left.index + 1
+        st.dataframe(df_schools_left)
+
+    # Summary by Jumlah Sekolah plus interactivity
+    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
     sekolah_rows = []
     for jenjang, target in sekolah_targets.items():
         df_sekolah = filtered_df[
@@ -459,9 +495,36 @@ def main_app():
     df_sekolah = pd.DataFrame(sekolah_rows)
     df_sekolah.index = df_sekolah.index + 1
     df_sekolah = df_sekolah[['Jenjang', 'Target Jumlah Sekolah', 'Jumlah Sekolah (unique)', 'Persentase', 'Kurang']]
-    st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
-    st.markdown('*Data cutoff: 08 September 2025*')
-    st.dataframe(df_sekolah)
+
+    gb_sekolah = GridOptionsBuilder.from_dataframe(df_sekolah)
+    gb_sekolah.configure_selection(selection_mode="single", use_checkbox=False)
+    grid_options_sekolah = gb_sekolah.build()
+    response_sekolah = AgGrid(
+        df_sekolah,
+        gridOptions=grid_options_sekolah,
+        update_mode=GridUpdateMode.SELECTION_CHANGED,
+        fit_columns_on_grid_load=True,
+        height=300,
+        reload_data=True,
+    )
+    selected_jenjang_sekolah = None
+    sel_rows_school = response_sekolah['selected_rows']
+    if sel_rows_school and len(sel_rows_school) > 0:
+        selected_jenjang_sekolah = sel_rows_school[0].get('Jenjang')
+
+    st.markdown(f'*Data cutoff: 26 September 2025*')
+
+    # Show sekolah details upon clicking a Jenjang in Sekolah summary
+    if selected_jenjang_sekolah:
+        st.markdown(f"#### Detail Sekolah untuk Jenjang: **{selected_jenjang_sekolah}** (dari Rekap Jumlah Sekolah)")
+        df_schools_left_sekolah = filtered_df[
+            (filtered_df['JENJANG'] == selected_jenjang_sekolah) &
+            (filtered_df['ASAL_SEKOLAH'].notna()) &
+            (filtered_df['ASAL_SEKOLAH'] != '')
+        ][['ASAL_SEKOLAH', 'NPSN', 'STATUS_SEKOLAH']].drop_duplicates().reset_index(drop=True)
+        df_schools_left_sekolah.index = df_schools_left_sekolah.index + 1
+        st.dataframe(df_schools_left_sekolah)
+
     st.write("---")
     st.header("Upload Data Terbaru")
     upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
@@ -526,6 +589,7 @@ def main_app():
         """,
         unsafe_allow_html=True,
     )
+
 # Main flow control
 if st.session_state.page == "landing":
     show_landing_page()
