@@ -7,7 +7,6 @@ from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 import plotly.graph_objects as go
 import plotly.express as px
 
-# --- CSS for layout and header/logo tweaks, no tall vertical spacing ---
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] > .main {
@@ -159,44 +158,44 @@ def main_app():
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
 
-    # Filtering UI
+    # Filters UI
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
         with col1:
             jenjang_filter = st.multiselect(
-                'JENJANG', 
-                df['JENJANG'].dropna().unique(), 
-                key="jenjang_filter", 
+                'JENJANG',
+                df['JENJANG'].dropna().unique(),
+                key="jenjang_filter",
                 default=st.session_state.get("jenjang_filter", []))
         with col2:
             kecamatan_filter = st.multiselect(
-                'KECAMATAN', 
-                df['KECAMATAN'].dropna().unique(), 
-                key="kecamatan_filter", 
+                'KECAMATAN',
+                df['KECAMATAN'].dropna().unique(),
+                key="kecamatan_filter",
                 default=st.session_state.get("kecamatan_filter", []))
         with col3:
             nama_pelatihan_filter = st.multiselect(
-                'NAMA PELATIHAN', 
-                df['NAMA_PELATIHAN'].dropna().unique(), 
-                key="nama_pelatihan_filter", 
+                'NAMA PELATIHAN',
+                df['NAMA_PELATIHAN'].dropna().unique(),
+                key="nama_pelatihan_filter",
                 default=st.session_state.get("nama_pelatihan_filter", []))
         with col4:
             pelatihan_filter = st.multiselect(
-                'PELATIHAN', 
-                df['PELATIHAN'].dropna().unique(), 
+                'PELATIHAN',
+                df['PELATIHAN'].dropna().unique(),
                 key="pelatihan_filter",
                 default=st.session_state.get("pelatihan_filter", []))
         with col5:
             status_options = df['STATUS_SEKOLAH'].dropna().unique() if 'STATUS_SEKOLAH' in df.columns else []
             status_sekolah_filter = st.multiselect(
-                'STATUS SEKOLAH', 
-                status_options, 
-                key="status_sekolah_filter", 
+                'STATUS SEKOLAH',
+                status_options,
+                key="status_sekolah_filter",
                 default=st.session_state.get("status_sekolah_filter", []))
         with col6:
             date_range = st.date_input(
-                'TANGGAL', 
-                value=st.session_state.get("date_range", []), 
+                'TANGGAL',
+                value=st.session_state.get("date_range", []),
                 key="date_range"
             )
     conditions = []
@@ -237,6 +236,7 @@ def main_app():
         display_df = filtered_df[cols]
     else:
         display_df = filtered_df
+
     st.write(f'Showing {display_df.shape[0]} records')
     view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
     if view_mode == 'Compact Table View':
@@ -244,6 +244,7 @@ def main_app():
         display_df_view = display_df[compact_cols].copy()
     else:
         display_df_view = display_df.copy()
+
     gb = GridOptionsBuilder.from_dataframe(display_df_view)
     gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
@@ -403,9 +404,14 @@ def main_app():
         reload_data=True,
     )
     selected_jenjang_sekolah = None
-    sel_rows_school = response_sekolah.get('selected_rows', [])
-    if sel_rows_school and isinstance(sel_rows_school, list) and len(sel_rows_school) > 0:
-        selected_jenjang_sekolah = sel_rows_school[0].get('Jenjang')
+    sel_rows_school = response_sekolah.get('selected_rows')
+    if sel_rows_school is not None:
+        # sel_rows_school can be DataFrame or list, handle both safely
+        if isinstance(sel_rows_school, pd.DataFrame):
+            if not sel_rows_school.empty:
+                selected_jenjang_sekolah = sel_rows_school.iloc[0].get('Jenjang')
+        elif isinstance(sel_rows_school, list) and len(sel_rows_school) > 0:
+            selected_jenjang_sekolah = sel_rows_school[0].get('Jenjang')
 
     st.markdown(f'*Data cutoff: 26 September 2025*')
 
@@ -418,6 +424,8 @@ def main_app():
         ][['ASAL_SEKOLAH', 'NPSN', 'STATUS_SEKOLAH']].drop_duplicates().reset_index(drop=True)
         df_schools_left_sekolah.index = df_schools_left_sekolah.index + 1
         st.dataframe(df_schools_left_sekolah)
+
+    # Optional: You can keep or add back the other summary tables or visualizations here based on your full app requirements
 
     st.write("---")
     st.header("Upload Data Terbaru")
@@ -463,6 +471,7 @@ def main_app():
                         st.error(f"Gagal menambahkan data: {e}")
         except Exception as e:
             st.error(f"Gagal membaca file unggahan: {e}")
+
     st.markdown(
         """
         <hr>
@@ -484,7 +493,7 @@ def main_app():
         unsafe_allow_html=True,
     )
 
-# Main flow control
+
 if st.session_state.page == "landing":
     show_landing_page()
 elif st.session_state.page == "main":
