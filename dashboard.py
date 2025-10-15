@@ -197,59 +197,87 @@ def main_app():
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
     filtered_df = df[pd.concat(conditions, axis=1).all(axis=1)] if conditions else df.copy()
 
+    # --- NEW: Search Functionality ---
+    st.markdown("---")
+    search_col1, search_col2 = st.columns(2)
+    with search_col1:
+        search_name = st.text_input("Cari Nama Peserta", key="search_name_input", placeholder="Ketik nama untuk mencari...")
+    with search_col2:
+        search_school = st.text_input("Cari Asal Sekolah", key="search_school_input", placeholder="Ketik nama sekolah untuk mencari...")
+
+    # Apply search filters on top of the main filters
+    search_results_df = filtered_df.copy()
+    if search_name:
+        search_results_df = search_results_df[search_results_df['NAMA_PESERTA'].str.contains(search_name, case=False, na=False)]
+    if search_school:
+        search_results_df = search_results_df[search_results_df['ASAL_SEKOLAH'].str.contains(search_school, case=False, na=False)]
+
     # --- DISPLAY SECTION (CARD VIEW / TABLE VIEW) ---
-    st.write(f'Showing {len(filtered_df)} records')
-
+    st.write(f'Showing {len(search_results_df)} records')
     view_mode = st.radio("Display mode:", ['Card View', 'Table View'], horizontal=True, label_visibility="collapsed")
-    
-    # --- CARD VIEW IMPLEMENTATION (REVISED FOR SIMPLICITY) ---
-    if view_mode == 'Card View':
-        # More columns for desktop since cards are smaller
-        num_columns = 4 
-        cols = st.columns(num_columns)
-        
-        # Adjust page size to fit the new grid
-        page_size = 24 # (4 columns * 6 rows)
-        total_pages = (len(filtered_df) // page_size) + 1
-        page_number = st.number_input(
-            label="Page", min_value=1, 
-            max_value=total_pages if total_pages > 0 else 1, 
-            step=1, key="card_page"
-        )
-        start_index = (page_number - 1) * page_size
-        end_index = start_index + page_size
-        
-        paginated_df = filtered_df.iloc[start_index:end_index]
 
-        # Iterate over the paginated data and display compact cards
+    # Initialize session state for pagination if it doesn't exist
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = 1
+
+    # Reset page to 1 if filters or search terms change the number of records
+    if 'last_record_count' not in st.session_state:
+        st.session_state.last_record_count = len(search_results_df)
+    if st.session_state.last_record_count != len(search_results_df):
+        st.session_state.current_page = 1
+        st.session_state.last_record_count = len(search_results_df)
+
+    # --- CARD VIEW IMPLEMENTATION with Custom Pagination ---
+    if view_mode == 'Card View':
+        page_size = 8
+        total_pages = (len(search_results_df) // page_size) + (1 if len(search_results_df) % page_size > 0 else 0)
+        total_pages = max(1, total_pages) # Ensure at least 1 page
+
+        # Ensure current page is valid
+        st.session_state.current_page = min(st.session_state.current_page, total_pages)
+
+        start_index = (st.session_state.current_page - 1) * page_size
+        end_index = start_index + page_size
+        paginated_df = search_results_df.iloc[start_index:end_index]
+
+        # Display the cards in a grid
+        num_columns = 4
+        cols = st.columns(num_columns)
         for index, row in paginated_df.reset_index().iterrows():
             col_index = index % num_columns
             with cols[col_index]:
                 with st.container(border=True):
-                    # Use markdown for more compact text
                     st.markdown(f"**{row.get('NAMA_PESERTA', 'N/A')}**")
-                    
-                    # Truncate long school/training names for display
                     school_name = str(row.get('ASAL_SEKOLAH', 'N/A'))
                     training_name = str(row.get('NAMA_PELATIHAN', 'N/A'))
-                    
                     st.markdown(f"<small><b>Sekolah:</b> {school_name[:25] + '...' if len(school_name) > 25 else school_name}</small>", unsafe_allow_html=True)
                     st.markdown(f"<small><b>Pelatihan:</b> {training_name[:25] + '...' if len(training_name) > 25 else training_name}</small>", unsafe_allow_html=True)
-                    
-                    # Use a shorter date format
                     tanggal_str = pd.to_datetime(row.get('TANGGAL')).strftime('%d %b %Y') if pd.notna(row.get('TANGGAL')) else 'N/A'
                     st.markdown(f"<small><b>Tanggal:</b> {tanggal_str}</small>", unsafe_allow_html=True)
-                    
-                    st.write("") # small spacer
-
-                    # Button to show details
+                    st.write("")
                     if st.button("Lihat Detail", key=f"detail_{row['index']}", use_container_width=True):
                         st.session_state.selected_participant_details = row.to_dict()
                         st.rerun()
+        
+        st.markdown("---")
+        
+        # --- NEW: Custom Pagination Logic ---
+        if total_pages > 1:
+            prev_col, page_info_col, next_col = st.columns([1, 8, 1])
+            with prev_col:
+                if st.button("⬅️ Prev", use_container_width=True, disabled=(st.session_state.current_page <= 1)):
+                    st.session_state.current_page -= 1
+                    st.rerun()
+            with page_info_col:
+                st.markdown(f"<div style='text-align: center; margin-top: 5px;'>Page {st.session_state.current_page} of {total_pages}</div>", unsafe_allow_html=True)
+            with next_col:
+                if st.button("Next ➡️", use_container_width=True, disabled=(st.session_state.current_page >= total_pages)):
+                    st.session_state.current_page += 1
+                    st.rerun()
 
-    # --- TABLE VIEW IMPLEMENTATION (Original AgGrid) ---
+    # --- TABLE VIEW IMPLEMENTATION (Now uses search results) ---
     elif view_mode == 'Table View':
-        display_df = filtered_df.copy()
+        display_df = search_results_df.copy() # Use the search results here
         if "NO" in display_df.columns: display_df = display_df.drop(columns=["NO"])
         display_df = display_df.reset_index(drop=True)
         display_df.insert(0, "NO", range(1, len(display_df) + 1))
@@ -267,7 +295,6 @@ def main_app():
             height=500, fit_columns_on_grid_load=True, reload_data=True, use_legacy_py_rendering=True
         )
         
-        # Detail view for Table selection
         selected = grid_response['selected_rows']
         if selected is not None and not selected.empty:
             st.session_state.selected_participant_details = selected.iloc[0].to_dict()
