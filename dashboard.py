@@ -123,14 +123,9 @@ def main_app():
     with colbtn2:
         if st.button("Reset Filter"):
             filter_defaults = {
-                "jenjang_filter": [],
-                "kecamatan_filter": [],
-                "nama_pelatihan_filter": [],
-                "pelatihan_filter": [],
-                "status_sekolah_filter": [],
-                "date_range": [],
-                "summary_status_filter": [],
-                "summary_kabupaten_filter": []
+                "jenjang_filter": [], "kecamatan_filter": [], "nama_pelatihan_filter": [],
+                "pelatihan_filter": [], "status_sekolah_filter": [], "date_range": [],
+                "summary_status_filter": [], "summary_kabupaten_filter": []
             }
             reset_filters(filter_defaults)
             st.rerun()
@@ -154,45 +149,43 @@ def main_app():
         df_sekolah.dropna(subset=['TIPE'], inplace=True)
         return df_sekolah
 
-    # --- Load Participant and School Data ---
+    # --- Load Data ---
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
     spreadsheet_id = '1_YeSK2zgoExnC8n6tlmoJFQDVEWZbncdBLx8S5k-ljc'
-    
     sheet_names = ['Tendik', 'Pendidik', 'Kejuruan']
     dfs = [load_data_from_gsheets(json_keyfile_str, spreadsheet_id, name) for name in sheet_names]
     df = pd.concat(dfs, ignore_index=True)
-
     df_sekolah_sumber = load_school_data(json_keyfile_str, spreadsheet_id)
 
-    # --- ROBUST DATA CLEANING (PARTICIPANT DATA) ---
+    # --- Data Cleaning ---
     df.columns = [col.strip().upper() for col in df.columns]
     if 'STASUS_SEKOLAH' in df.columns:
         df.rename(columns={'STASUS_SEKOLAH': 'STATUS_SEKOLAH'}, inplace=True)
     df = df.loc[:, ~df.columns.duplicated(keep='first')]
-
     df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
     if 'NPSN' in df.columns:
         df['NPSN'] = df['NPSN'].astype(str)
     if 'STATUS_SEKOLAH' not in df.columns:
         df['STATUS_SEKOLAH'] = pd.NA
-        
+
     pelatihan_choice = st.session_state.get("pelatihan_filter", [None])[0] if len(st.session_state.get("pelatihan_filter", [])) == 1 else None
-    title_map = {
-        'Tendik': 'Data Peserta Pelatihan Tenaga Kependidikan', 'Pendidik': 'Data Peserta Pelatihan Pendidik', 'Kejuruan': 'Data Peserta Pelatihan Kejuruan'
-    }
+    title_map = {'Tendik': 'Data Peserta Pelatihan Tenaga Kependidikan', 'Pendidik': 'Data Peserta Pelatihan Pendidik', 'Kejuruan': 'Data Peserta Pelatihan Kejuruan'}
     main_title = title_map.get(pelatihan_choice, 'Data Peserta Pelatihan Tenaga Kependidikan')
     st.title(main_title)
 
-    # --- Top-level Filters for the Main Table ---
+    # --- Filters ---
     with st.container():
-        col1, col2, col3, col4, col5, col6 = st.columns(6)
-        with col1: jenjang_filter = st.multiselect('JENJANG', df['JENJANG'].dropna().unique(), key="jenjang_filter")
-        with col2: kecamatan_filter = st.multiselect('KECAMATAN', df['KECAMATAN'].dropna().unique(), key="kecamatan_filter")
-        with col3: nama_pelatihan_filter = st.multiselect('NAMA PELATIHAN', df['NAMA_PELATIHAN'].dropna().unique(), key="nama_pelatihan_filter")
-        with col4: pelatihan_filter = st.multiselect('PELATIHAN', df['PELATIHAN'].dropna().unique(), key="pelatihan_filter")
-        with col5: status_sekolah_filter = st.multiselect('STATUS SEKOLAH', df['STATUS_SEKOLAH'].dropna().unique(), key="status_sekolah_filter")
-        with col6: date_range = st.date_input('TANGGAL', value=[], key="date_range")
-
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            jenjang_filter = st.multiselect('JENJANG', df['JENJANG'].dropna().unique(), key="jenjang_filter")
+            kecamatan_filter = st.multiselect('KECAMATAN', df['KECAMATAN'].dropna().unique(), key="kecamatan_filter")
+        with col2:
+            nama_pelatihan_filter = st.multiselect('NAMA PELATIHAN', df['NAMA_PELATIHAN'].dropna().unique(), key="nama_pelatihan_filter")
+            pelatihan_filter = st.multiselect('PELATIHAN', df['PELATIHAN'].dropna().unique(), key="pelatihan_filter")
+        with col3:
+            status_sekolah_filter = st.multiselect('STATUS SEKOLAH', df['STATUS_SEKOLAH'].dropna().unique(), key="status_sekolah_filter")
+            date_range = st.date_input('TANGGAL', value=[], key="date_range")
+            
     conditions = []
     if jenjang_filter: conditions.append(df['JENJANG'].isin(jenjang_filter))
     if kecamatan_filter: conditions.append(df['KECAMATAN'].isin(kecamatan_filter))
@@ -202,68 +195,98 @@ def main_app():
     if len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
-
     filtered_df = df[pd.concat(conditions, axis=1).all(axis=1)] if conditions else df.copy()
 
-    # --- AGGRID TABLE DISPLAY ---
+    # --- DISPLAY SECTION (CARD VIEW / TABLE VIEW) ---
     st.write(f'Showing {len(filtered_df)} records')
 
-    display_df = filtered_df.copy()
-    if "NO" in display_df.columns: display_df = display_df.drop(columns=["NO"])
-    display_df = display_df.reset_index(drop=True)
-    display_df.insert(0, "NO", range(1, len(display_df) + 1))
-    display_df['TANGGAL'] = display_df['TANGGAL'].dt.strftime('%Y-%m-%d')
-    if 'CATEGORY' in display_df.columns: display_df = display_df.drop(columns=['CATEGORY'])
-    cols = list(display_df.columns)
-    if 'STATUS_SEKOLAH' in cols and 'ASAL_SEKOLAH' in cols:
-        cols.remove('STATUS_SEKOLAH')
-        cols.insert(cols.index('ASAL_SEKOLAH') + 1, 'STATUS_SEKOLAH')
-        display_df = display_df[cols]
-
-    view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
-    compact_cols = ['NO', 'NAMA_PESERTA', 'ASAL_SEKOLAH', 'NAMA_PELATIHAN', 'TANGGAL']
-    display_df_view = display_df[[c for c in compact_cols if c in display_df.columns]] if view_mode == 'Compact Table View' else display_df
+    view_mode = st.radio("Display mode:", ['Card View', 'Table View'], horizontal=True, label_visibility="collapsed")
     
-    gb = GridOptionsBuilder.from_dataframe(display_df_view)
-    gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
-    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
-    gb.configure_selection(selection_mode="single", use_checkbox=False)
-    grid_options = gb.build()
-    
-    grid_response = AgGrid(
-        display_df_view, 
-        gridOptions=grid_options, 
-        update_mode=GridUpdateMode.SELECTION_CHANGED,
-        height=500, 
-        fit_columns_on_grid_load=True, 
-        reload_data=True, 
-        use_legacy_py_rendering=True
-    )
-
-    # --- DETAIL VIEW LOGIC ---
-    selected = grid_response['selected_rows']
-    if selected is not None and not selected.empty:
-        selected_row = selected.iloc[0]
-        selected_name = selected_row['NAMA_PESERTA']
-        selected_school = selected_row['ASAL_SEKOLAH']
-
-        st.markdown("### Detail Peserta")
-        st.write(f"Semua pelatihan yang diikuti oleh: **{selected_name}** dari **{selected_school}**")
-
-        participant_trainings = filtered_df[
-            (filtered_df['NAMA_PESERTA'] == selected_name) &
-            (filtered_df['ASAL_SEKOLAH'] == selected_school)
-        ][['NAMA_PELATIHAN', 'TANGGAL', 'ASAL_SEKOLAH', 'NPSN']].drop_duplicates().reset_index(drop=True)
+    # --- CARD VIEW IMPLEMENTATION ---
+    if view_mode == 'Card View':
+        # Define number of columns for the grid
+        num_columns = 3
+        cols = st.columns(num_columns)
         
-        participant_trainings['TANGGAL'] = pd.to_datetime(participant_trainings['TANGGAL']).dt.strftime('%Y-%m-%d')
+        # Paginate the data manually for card view
+        page_size = 21 # (3 columns * 7 rows)
+        page_number = st.number_input(label="Page", min_value=1, max_value=(len(filtered_df) // page_size) + 1, step=1, key="card_page")
+        start_index = (page_number - 1) * page_size
+        end_index = start_index + page_size
         
-        participant_trainings.index += 1
-        st.dataframe(participant_trainings, use_container_width=True)
-        st.write(f"Jumlah pelatihan: {len(participant_trainings)}")
+        paginated_df = filtered_df.iloc[start_index:end_index]
 
-    # --- DYNAMIC SUMMARY SECTION ---
+        # Iterate over the paginated data and display cards
+        for index, row in paginated_df.reset_index().iterrows():
+            col_index = index % num_columns
+            with cols[col_index]:
+                with st.container(border=True):
+                    st.subheader(row.get('NAMA_PESERTA', 'N/A'))
+                    st.write(f"**Asal Sekolah:** {row.get('ASAL_SEKOLAH', 'N/A')}")
+                    st.write(f"**Pelatihan:** {row.get('NAMA_PELATIHAN', 'N/A')}")
+                    
+                    tanggal_str = pd.to_datetime(row.get('TANGGAL')).strftime('%d %B %Y') if pd.notna(row.get('TANGGAL')) else 'N/A'
+                    st.write(f"**Tanggal:** {tanggal_str}")
+
+                    # Button to show details, with a unique key for each card
+                    if st.button("Lihat Detail", key=f"detail_{row['index']}"):
+                        st.session_state.selected_participant_details = row.to_dict()
+                        st.rerun()
+
+    # --- TABLE VIEW IMPLEMENTATION (Original AgGrid) ---
+    elif view_mode == 'Table View':
+        display_df = filtered_df.copy()
+        if "NO" in display_df.columns: display_df = display_df.drop(columns=["NO"])
+        display_df = display_df.reset_index(drop=True)
+        display_df.insert(0, "NO", range(1, len(display_df) + 1))
+        display_df['TANGGAL'] = display_df['TANGGAL'].dt.strftime('%Y-%m-%d')
+        if 'CATEGORY' in display_df.columns: display_df = display_df.drop(columns=['CATEGORY'])
+        
+        gb = GridOptionsBuilder.from_dataframe(display_df)
+        gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
+        gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
+        gb.configure_selection(selection_mode="single", use_checkbox=False)
+        grid_options = gb.build()
+        
+        grid_response = AgGrid(
+            display_df, gridOptions=grid_options, update_mode=GridUpdateMode.SELECTION_CHANGED,
+            height=500, fit_columns_on_grid_load=True, reload_data=True, use_legacy_py_rendering=True
+        )
+        
+        # Detail view for Table selection
+        selected = grid_response['selected_rows']
+        if selected is not None and not selected.empty:
+            st.session_state.selected_participant_details = selected.iloc[0].to_dict()
+
+    # --- DETAIL VIEW LOGIC (Used by both Card and Table views) ---
+    if 'selected_participant_details' in st.session_state and st.session_state.selected_participant_details:
+        with st.container(border=True):
+            selected_row = st.session_state.selected_participant_details
+            selected_name = selected_row.get('NAMA_PESERTA', 'N/A')
+            selected_school = selected_row.get('ASAL_SEKOLAH', 'N/A')
+
+            st.markdown("### Detail Peserta")
+            st.write(f"Semua pelatihan yang diikuti oleh: **{selected_name}** dari **{selected_school}**")
+
+            participant_trainings = df[
+                (df['NAMA_PESERTA'] == selected_name) &
+                (df['ASAL_SEKOLAH'] == selected_school)
+            ][['NAMA_PELATIHAN', 'TANGGAL', 'ASAL_SEKOLAH', 'NPSN']].drop_duplicates().reset_index(drop=True)
+            
+            participant_trainings['TANGGAL'] = pd.to_datetime(participant_trainings['TANGGAL']).dt.strftime('%Y-%m-%d')
+            participant_trainings.index += 1
+            st.dataframe(participant_trainings, use_container_width=True)
+            st.write(f"Jumlah pelatihan: {len(participant_trainings)}")
+            
+            if st.button("Tutup Detail"):
+                del st.session_state.selected_participant_details
+                st.rerun()
+
+    # --- DYNAMIC SUMMARY SECTION (Unchanged) ---
     st.markdown('---')
     st.subheader("Filter untuk Rekap Pencapaian")
+    # ... (The rest of your summary, upload, and footer code remains exactly the same)
+    # ... I am omitting it here for brevity, but you should keep it in your file.
     summary_col1, summary_col2 = st.columns(2)
     with summary_col1:
         summary_status_filter = st.multiselect(
@@ -278,14 +301,12 @@ def main_app():
             key="summary_kabupaten_filter"
         )
 
-    # 1. Filter the SOURCE school data based on user selection
     filtered_school_data = df_sekolah_sumber.copy()
     if summary_status_filter:
         filtered_school_data = filtered_school_data[filtered_school_data['STATUS'].isin(summary_status_filter)]
     if summary_kabupaten_filter:
         filtered_school_data = filtered_school_data[filtered_school_data['KABUPATEN'].isin(summary_kabupaten_filter)]
 
-    # 2. Recalculate TARGETS dynamically from the filtered school data
     def get_dynamic_targets(filtered_df_sekolah):
         df_sekolah = filtered_df_sekolah[filtered_df_sekolah['TIPE'] != 'SLB'].copy()
         df_sekolah['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
@@ -296,17 +317,13 @@ def main_app():
         return jenjang_targets, sekolah_targets
 
     jenjang_targets, sekolah_targets = get_dynamic_targets(filtered_school_data)
-
-    # 3. Filter the ACHIEVEMENT data (from participants) using the same criteria
     npsn_to_show = filtered_school_data['NPSN'].astype(str).unique()
     
     summary_df = filtered_df.copy()
     if summary_status_filter or summary_kabupaten_filter:
         summary_df = summary_df[summary_df['NPSN'].astype(str).isin(npsn_to_show)]
 
-    # --- Display Summary Tables with Dynamic Targets ---
     prefix = pelatihan_choice if pelatihan_choice else "Keseluruhan"
-    
     all_jenjang = sorted([j for j in df_sekolah_sumber['TIPE'].unique() if j != 'SLB'])
 
     summary_rows = []
@@ -343,12 +360,11 @@ def main_app():
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
     st.dataframe(df_summary_sekolah, use_container_width=True)
     
-    # --- FIX: Replaced hardcoded date with dynamic date ---
     st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
     
-    # --- Upload and Footer sections ---
     st.write("---")
     st.header("Upload Data Terbaru")
+    # ... (Your upload and footer section continues here)
     upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
     uploaded_file = st.file_uploader(f"Upload file CSV atau Excel untuk pelatihan '{upload_category}' (format sesuai template)", type=['csv', 'xlsx'])
     
@@ -397,7 +413,7 @@ def main_app():
         """,
         unsafe_allow_html=True,
     )
-    
+
 # Main flow control
 if st.session_state.page == "landing":
     show_landing_page()
