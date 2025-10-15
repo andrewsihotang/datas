@@ -242,11 +242,10 @@ def main_app():
 
     # --- DETAIL VIEW LOGIC (CORRECTED) ---
     selected = grid_response['selected_rows']
-    # The fix is to check 'if not selected.empty' instead of 'if selected'
-    if not selected.empty:
-        # Get the first row of the DataFrame
+    
+    # --- FIX: Check if selected is not None BEFORE checking if it's empty ---
+    if selected is not None and not selected.empty:
         selected_row = selected.iloc[0]
-        # Access data like a dictionary from the row (which is a pandas Series)
         selected_name = selected_row['NAMA_PESERTA']
         selected_school = selected_row['ASAL_SEKOLAH']
 
