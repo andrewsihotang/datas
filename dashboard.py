@@ -205,7 +205,7 @@ def main_app():
 
     filtered_df = df[pd.concat(conditions, axis=1).all(axis=1)] if conditions else df.copy()
 
-    # --- AGGRID TABLE DISPLAY (RESTORED) ---
+    # --- AGGRID TABLE DISPLAY ---
     st.write(f'Showing {len(filtered_df)} records')
 
     display_df = filtered_df.copy()
@@ -231,7 +231,6 @@ def main_app():
     grid_options = gb.build()
     AgGrid(display_df_view, gridOptions=grid_options, update_mode=GridUpdateMode.SELECTION_CHANGED,
            height=500, fit_columns_on_grid_load=True, reload_data=True, use_legacy_py_rendering=True)
-    # --- END OF RESTORED TABLE SECTION ---
 
     st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
     st.markdown('---')
@@ -260,9 +259,9 @@ def main_app():
         filtered_school_data = filtered_school_data[filtered_school_data['KABUPATEN'].isin(summary_kabupaten_filter)]
 
     # 2. Recalculate TARGETS dynamically from the filtered school data
-    @st.cache_data
-    def get_dynamic_targets(_filtered_df_sekolah):
-        df_sekolah = _filtered_df_sekolah[_filtered_df_sekolah['TIPE'] != 'SLB'].copy()
+    # --- FIX: REMOVED @st.cache_data decorator ---
+    def get_dynamic_targets(filtered_df_sekolah):
+        df_sekolah = filtered_df_sekolah[filtered_df_sekolah['TIPE'] != 'SLB'].copy()
         df_sekolah['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
         df_sekolah['TENAGA_KEPENDIDIKAN'] = pd.to_numeric(df_sekolah['TENAGA_KEPENDIDIKAN'], errors='coerce').fillna(0).astype(int)
         df_sekolah['TARGET_PESERTA'] = df_sekolah['KEPALA_SEKOLAH'] + df_sekolah['TENAGA_KEPENDIDIKAN']
