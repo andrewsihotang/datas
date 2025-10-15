@@ -119,7 +119,7 @@ def main_app():
     with colbtn1:
         if st.button("Refresh Data"):
             st.cache_data.clear()
-            st.rerun() # Use rerun to ensure the app state is refreshed
+            st.rerun()
     with colbtn2:
         if st.button("Reset Filter"):
             filter_defaults = {
@@ -129,12 +129,11 @@ def main_app():
                 "pelatihan_filter": [],
                 "status_sekolah_filter": [],
                 "date_range": [],
-                # Also reset the new summary filters
                 "summary_status_filter": [],
                 "summary_kabupaten_filter": []
             }
             reset_filters(filter_defaults)
-            st.rerun() # Use rerun to ensure the app state is refreshed
+            st.rerun()
 
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
@@ -147,6 +146,15 @@ def main_app():
         df = pd.DataFrame(data)
         df.columns = df.columns.str.strip()
         return df
+
+    # --- FIX: New dedicated function to load and clean school data ---
+    @st.cache_data
+    def load_school_data(json_keyfile_str, spreadsheet_id):
+        df_sekolah = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, 'data_sekolah')
+        df_sekolah.columns = [col.strip().upper() for col in df_sekolah.columns]
+        df_sekolah['TIPE'].replace('', pd.NA, inplace=True)
+        df_sekolah.dropna(subset=['TIPE'], inplace=True)
+        return df_sekolah
 
     # --- Load Participant Data ---
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
@@ -171,32 +179,23 @@ def main_app():
     if 'STATUS_SEKOLAH' not in df.columns:
         df['STATUS_SEKOLAH'] = pd.NA
         
-    # --- Load and Process Target Data from 'data_sekolah' sheet ---
+    # --- Load and Process Target Data using the new function ---
+    df_sekolah_sumber = load_school_data(json_keyfile_str, spreadsheet_id)
+
     @st.cache_data
-    def get_dynamic_targets(json_keyfile_str, spreadsheet_id):
-        df_sekolah_sumber = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, 'data_sekolah')
-        df_sekolah_sumber.columns = [col.strip().upper() for col in df_sekolah_sumber.columns]
-        
-        df_sekolah_sumber['TIPE'].replace('', pd.NA, inplace=True)
-        df_sekolah_sumber.dropna(subset=['TIPE'], inplace=True)
-
-        df_sekolah_sumber = df_sekolah_sumber[df_sekolah_sumber['TIPE'] != 'SLB']
-
-        df_sekolah_sumber['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah_sumber['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
-        df_sekolah_sumber['TENAGA_KEPENDIDIKAN'] = pd.to_numeric(df_sekolah_sumber['TENAGA_KEPENDIDIKAN'], errors='coerce').fillna(0).astype(int)
-
-        df_sekolah_sumber['TARGET_PESERTA'] = df_sekolah_sumber['KEPALA_SEKOLAH'] + df_sekolah_sumber['TENAGA_KEPENDIDIKAN']
-        jenjang_targets = df_sekolah_sumber.groupby('TIPE')['TARGET_PESERTA'].sum().to_dict()
-        sekolah_targets = df_sekolah_sumber['TIPE'].value_counts().to_dict()
-        
+    def get_dynamic_targets(_df_sekolah_sumber):
+        df_sekolah_sumber_copy = _df_sekolah_sumber.copy()
+        df_sekolah_sumber_copy = df_sekolah_sumber_copy[df_sekolah_sumber_copy['TIPE'] != 'SLB']
+        df_sekolah_sumber_copy['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah_sumber_copy['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
+        df_sekolah_sumber_copy['TENAGA_KEPENDIDIKAN'] = pd.to_numeric(df_sekolah_sumber_copy['TENAGA_KEPENDIDIKAN'], errors='coerce').fillna(0).astype(int)
+        df_sekolah_sumber_copy['TARGET_PESERTA'] = df_sekolah_sumber_copy['KEPALA_SEKOLAH'] + df_sekolah_sumber_copy['TENAGA_KEPENDIDIKAN']
+        jenjang_targets = df_sekolah_sumber_copy.groupby('TIPE')['TARGET_PESERTA'].sum().to_dict()
+        sekolah_targets = df_sekolah_sumber_copy['TIPE'].value_counts().to_dict()
         return jenjang_targets, sekolah_targets
 
-    jenjang_targets, sekolah_targets = get_dynamic_targets(json_keyfile_str, spreadsheet_id)
+    jenjang_targets, sekolah_targets = get_dynamic_targets(df_sekolah_sumber)
 
-    if "pelatihan_filter" in st.session_state and len(st.session_state.pelatihan_filter) == 1:
-        pelatihan_choice = st.session_state.pelatihan_filter[0]
-    else:
-        pelatihan_choice = None
+    pelatihan_choice = st.session_state.get("pelatihan_filter", [None])[0] if len(st.session_state.get("pelatihan_filter", [])) == 1 else None
     title_map = {
         'Tendik': 'Data Peserta Pelatihan Tenaga Kependidikan',
         'Pendidik': 'Data Peserta Pelatihan Pendidik',
@@ -208,29 +207,18 @@ def main_app():
     with st.container():
         col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1])
         with col1:
-            jenjang_filter = st.multiselect(
-                'JENJANG', df['JENJANG'].dropna().unique(), key="jenjang_filter", 
-                default=st.session_state.get("jenjang_filter", []))
+            jenjang_filter = st.multiselect('JENJANG', df['JENJANG'].dropna().unique(), key="jenjang_filter")
         with col2:
-            kecamatan_filter = st.multiselect(
-                'KECAMATAN', df['KECAMATAN'].dropna().unique(), key="kecamatan_filter", 
-                default=st.session_state.get("kecamatan_filter", []))
+            kecamatan_filter = st.multiselect('KECAMATAN', df['KECAMATAN'].dropna().unique(), key="kecamatan_filter")
         with col3:
-            nama_pelatihan_filter = st.multiselect(
-                'NAMA PELATIHAN', df['NAMA_PELATIHAN'].dropna().unique(), key="nama_pelatihan_filter", 
-                default=st.session_state.get("nama_pelatihan_filter", []))
+            nama_pelatihan_filter = st.multiselect('NAMA PELATIHAN', df['NAMA_PELATIHAN'].dropna().unique(), key="nama_pelatihan_filter")
         with col4:
-            pelatihan_filter = st.multiselect(
-                'PELATIHAN', df['PELATIHAN'].dropna().unique(), key="pelatihan_filter",
-                default=st.session_state.get("pelatihan_filter", []))
+            pelatihan_filter = st.multiselect('PELATIHAN', df['PELATIHAN'].dropna().unique(), key="pelatihan_filter")
         with col5:
             status_options = df['STATUS_SEKOLAH'].dropna().unique() if 'STATUS_SEKOLAH' in df.columns else []
-            status_sekolah_filter = st.multiselect(
-                'STATUS SEKOLAH', status_options, key="status_sekolah_filter", 
-                default=st.session_state.get("status_sekolah_filter", []))
+            status_sekolah_filter = st.multiselect('STATUS SEKOLAH', status_options, key="status_sekolah_filter")
         with col6:
-            date_range = st.date_input(
-                'TANGGAL', value=st.session_state.get("date_range", []), key="date_range")
+            date_range = st.date_input('TANGGAL', value=[], key="date_range")
 
     conditions = []
     if jenjang_filter: conditions.append(df['JENJANG'].isin(jenjang_filter))
@@ -243,90 +231,73 @@ def main_app():
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
 
-    if conditions:
-        filter_condition = pd.Series(True, index=df.index)
-        for cond in conditions:
-            filter_condition &= cond
-    else:
-        filter_condition = pd.Series(True, index=df.index)
+    filtered_df = df[pd.concat(conditions, axis=1).all(axis=1)] if conditions else df
 
-    filtered_df = df[filter_condition].copy()
-    
-    # --- Clean and format the filtered dataframe for display ---
     display_df = filtered_df.copy()
-    if "NO" in display_df.columns:
-        display_df = display_df.drop(columns=["NO"])
+    if "NO" in display_df.columns: display_df = display_df.drop(columns=["NO"])
     display_df = display_df.reset_index(drop=True)
     display_df.insert(0, "NO", range(1, len(display_df) + 1))
     display_df['TANGGAL'] = pd.to_datetime(display_df['TANGGAL'], errors='coerce').dt.strftime('%Y-%m-%d')
-    if 'CATEGORY' in display_df.columns:
-        display_df = display_df.drop(columns=['CATEGORY'])
+    if 'CATEGORY' in display_df.columns: display_df = display_df.drop(columns=['CATEGORY'])
     cols = list(display_df.columns)
     if 'STATUS_SEKOLAH' in cols and 'ASAL_SEKOLAH' in cols:
         cols.remove('STATUS_SEKOLAH')
-        asal_idx = cols.index('ASAL_SEKOLAH')
-        cols.insert(asal_idx + 1, 'STATUS_SEKOLAH')
+        cols.insert(cols.index('ASAL_SEKOLAH') + 1, 'STATUS_SEKOLAH')
         display_df = display_df[cols]
 
     st.write(f'Showing {display_df.shape[0]} records')
     
     view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
-    if view_mode == 'Compact Table View':
-        compact_cols = ['NO', 'NAMA_PESERTA', 'ASAL_SEKOLAH', 'NAMA_PELATIHAN', 'TANGGAL']
-        compact_cols_exist = [col for col in compact_cols if col in display_df.columns]
-        display_df_view = display_df[compact_cols_exist].copy()
-    else:
-        display_df_view = display_df.copy()
+    compact_cols = ['NO', 'NAMA_PESERTA', 'ASAL_SEKOLAH', 'NAMA_PELATIHAN', 'TANGGAL']
+    display_df_view = display_df[[c for c in compact_cols if c in display_df.columns]] if view_mode == 'Compact Table View' else display_df
 
     gb = GridOptionsBuilder.from_dataframe(display_df_view)
     gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
-    grid_options = gb.build()
-    AgGrid(display_df_view, gridOptions=grid_options, update_mode=GridUpdateMode.SELECTION_CHANGED,
+    AgGrid(display_df_view, gridOptions=gb.build(), update_mode=GridUpdateMode.SELECTION_CHANGED,
            height=500, fit_columns_on_grid_load=True, reload_data=True)
 
     st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
     st.markdown('---')
     
-    # --- NEW: FILTERS FOR SUMMARY TABLES ---
     st.subheader("Filter untuk Rekap Pencapaian")
     summary_col1, summary_col2 = st.columns(2)
     with summary_col1:
         summary_status_filter = st.multiselect(
             'Filter Status Sekolah (Negeri/Swasta)',
-            options=df['STATUS_SEKOLAH'].dropna().unique(),
-            key="summary_status_filter",
-            default=st.session_state.get("summary_status_filter", [])
+            options=df_sekolah_sumber['STATUS'].dropna().unique() if 'STATUS' in df_sekolah_sumber.columns else [],
+            key="summary_status_filter"
         )
     with summary_col2:
-        # Ensure KABUPATEN column exists before creating the filter
-        kabupaten_options = df['KABUPATEN'].dropna().unique() if 'KABUPATEN' in df.columns else []
+        # --- FIX: Populate options from the correct school dataframe ---
+        kabupaten_options = df_sekolah_sumber['KABUPATEN'].dropna().unique() if 'KABUPATEN' in df_sekolah_sumber.columns else []
         summary_kabupaten_filter = st.multiselect(
             'Filter Kabupaten/Kota',
             options=kabupaten_options,
-            key="summary_kabupaten_filter",
-            default=st.session_state.get("summary_kabupaten_filter", [])
+            key="summary_kabupaten_filter"
         )
     
-    # Apply the new filters to a copy of the main filtered_df
-    summary_df = filtered_df.copy()
+    # --- Apply new filters to the SCHOOL data source to get a list of relevant schools (NPSN) ---
+    filtered_school_list = df_sekolah_sumber.copy()
     if summary_status_filter:
-        summary_df = summary_df[summary_df['STATUS_SEKOLAH'].isin(summary_status_filter)]
-    if summary_kabupaten_filter and 'KABUPATEN' in summary_df.columns:
-        summary_df = summary_df[summary_df['KABUPATEN'].isin(summary_kabupaten_filter)]
-    # --- END OF NEW FILTER SECTION ---
+        filtered_school_list = filtered_school_list[filtered_school_list['STATUS'].isin(summary_status_filter)]
+    if summary_kabupaten_filter:
+        filtered_school_list = filtered_school_list[filtered_school_list['KABUPATEN'].isin(summary_kabupaten_filter)]
+    
+    # Get the list of NPSN from the filtered schools
+    npsn_to_show = filtered_school_list['NPSN'].astype(str).unique()
 
-    prefix = pelatihan_filter[0] if pelatihan_filter and len(pelatihan_filter) == 1 else "Keseluruhan"
+    # Filter the PARTICIPANT data based on the NPSN list from the filtered schools
+    summary_df = filtered_df.copy()
+    if summary_status_filter or summary_kabupaten_filter:
+        summary_df = summary_df[summary_df['NPSN'].astype(str).isin(npsn_to_show)]
+
+    prefix = pelatihan_choice if pelatihan_choice else "Keseluruhan"
         
     summary_rows = []
     for jenjang, target in jenjang_targets.items():
-        # Use the newly filtered 'summary_df' for calculations
-        df_jenjang = summary_df[
-            (summary_df['JENJANG'] == jenjang) &
-            (summary_df['NPSN'].notna()) &
-            (summary_df['NPSN'].astype(str) != '0')
-        ]
+        df_jenjang = summary_df[summary_df['JENJANG'] == jenjang]
         unique_count = df_jenjang.drop_duplicates(subset=['NAMA_PESERTA', 'ASAL_SEKOLAH']).shape[0]
         percent = (unique_count / target * 100) if target > 0 else 0
         kurang = max(0, target - unique_count)
@@ -338,18 +309,13 @@ def main_app():
             'Kurang': f"{kurang:,} Orang"
         })
     df_summary_jenjang = pd.DataFrame(summary_rows).set_index('Jenjang').reindex(jenjang_targets.keys()).reset_index()
-    df_summary_jenjang.index = df_summary_jenjang.index + 1
+    df_summary_jenjang.index += 1
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
-    st.dataframe(df_summary_jenjang)
+    st.dataframe(df_summary_jenjang, use_container_width=True)
         
     sekolah_rows = []
     for jenjang, target in sekolah_targets.items():
-        # Also use the 'summary_df' for these calculations
-        df_sekolah = summary_df[
-            (summary_df['JENJANG'] == jenjang) &
-            (summary_df['ASAL_SEKOLAH'].notna()) &
-            (summary_df['ASAL_SEKOLAH'] != '')
-        ]
+        df_sekolah = summary_df[summary_df['JENJANG'] == jenjang]
         unique_sekolah_count = df_sekolah['ASAL_SEKOLAH'].nunique()
         capped_count = min(unique_sekolah_count, target)
         percent = (capped_count / target * 100) if target > 0 else 0
@@ -362,35 +328,27 @@ def main_app():
             'Kurang': f"{kurang:,} Sekolah"
         })
     df_summary_sekolah = pd.DataFrame(sekolah_rows).set_index('Jenjang').reindex(sekolah_targets.keys()).reset_index()
-    df_summary_sekolah.index = df_summary_sekolah.index + 1
+    df_summary_sekolah.index += 1
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
-    st.dataframe(df_summary_sekolah)
+    st.dataframe(df_summary_sekolah, use_container_width=True)
     
     st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
     
-    # --- Upload Section and Footer ---
     st.write("---")
     st.header("Upload Data Terbaru")
     upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
-    uploaded_file = st.file_uploader(
-        f"Upload file CSV atau Excel untuk pelatihan '{upload_category}' (format sesuai template)",
-        type=['csv', 'xlsx']
-    )
+    uploaded_file = st.file_uploader(f"Upload file CSV atau Excel untuk pelatihan '{upload_category}' (format sesuai template)", type=['csv', 'xlsx'])
+    
     if uploaded_file is not None:
         try:
             new_data = pd.read_csv(uploaded_file, sep=';') if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
             st.write("Pratinjau data yang diunggah:")
             st.dataframe(new_data)
-
             expected_cols_base = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, upload_category).columns
-            missing_cols = [col for col in expected_cols_base if col not in new_data.columns]
-            
-            if missing_cols:
-                 st.error(f"File unggahan kehilangan beberapa kolom wajib. Kolom yang hilang: {', '.join(missing_cols)}")
+            if any(c not in new_data.columns for c in expected_cols_base):
+                st.error(f"File unggahan kehilangan beberapa kolom wajib. Kolom yang hilang: {', '.join(set(expected_cols_base) - set(new_data.columns))}")
             else:
-                for col in new_data.select_dtypes(include=['datetime64', 'datetimetz']).columns:
-                    new_data[col] = new_data[col].dt.strftime('%Y-%m-%d')
-                
+                new_data = new_data.astype(str)
                 if st.button("Tambahkan data ke Google Sheet"):
                     try:
                         scopes = ['https://www.googleapis.com/auth/spreadsheets']
