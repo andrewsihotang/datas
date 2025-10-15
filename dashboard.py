@@ -169,15 +169,20 @@ def main_app():
     def get_dynamic_targets(json_keyfile_str, spreadsheet_id):
         df_sekolah_sumber = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, 'data_sekolah')
         
+        # --- FIX: Clean up column names to prevent KeyErrors ---
+        # This converts all column names to uppercase and removes leading/trailing spaces.
+        df_sekolah_sumber.columns = [col.strip().upper() for col in df_sekolah_sumber.columns]
+        
         # Filter out 'SLB' as requested
+        # Now this line will work correctly even if the header in the sheet is 'tipe' or 'Tipe'
         df_sekolah_sumber = df_sekolah_sumber[df_sekolah_sumber['TIPE'] != 'SLB']
 
         # Ensure target columns are numeric, coercing errors to NaN, then filling with 0
-        df_sekolah_sumber['Kepala_Sekolah'] = pd.to_numeric(df_sekolah_sumber['Kepala_Sekolah'], errors='coerce').fillna(0).astype(int)
-        df_sekolah_sumber['Tenaga_Kependidikan'] = pd.to_numeric(df_sekolah_sumber['Tenaga_Kependidikan'], errors='coerce').fillna(0).astype(int)
+        df_sekolah_sumber['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah_sumber['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
+        df_sekolah_sumber['TENAGA_KEPENDIDIKAN'] = pd.to_numeric(df_sekolah_sumber['TENAGA_KEPENDIDIKAN'], errors='coerce').fillna(0).astype(int)
 
         # Calculate Participant Target: Sum of Kepala_Sekolah and Tenaga_Kependidikan per Tipe
-        df_sekolah_sumber['TARGET_PESERTA'] = df_sekolah_sumber['Kepala_Sekolah'] + df_sekolah_sumber['Tenaga_Kependidikan']
+        df_sekolah_sumber['TARGET_PESERTA'] = df_sekolah_sumber['KEPALA_SEKOLAH'] + df_sekolah_sumber['TENAGA_KEPENDIDIKAN']
         jenjang_targets = df_sekolah_sumber.groupby('TIPE')['TARGET_PESERTA'].sum().to_dict()
 
         # Calculate School Target: Count of schools per Tipe
@@ -370,8 +375,6 @@ def main_app():
                              'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
     st.dataframe(df_summary)
-
-    # GRAPHS SECTION HAS BEEN REMOVED
         
     sekolah_rows = []
     for jenjang, target in sekolah_targets.items():
