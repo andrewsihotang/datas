@@ -202,34 +202,48 @@ def main_app():
 
     view_mode = st.radio("Display mode:", ['Card View', 'Table View'], horizontal=True, label_visibility="collapsed")
     
-    # --- CARD VIEW IMPLEMENTATION ---
+    # --- CARD VIEW IMPLEMENTATION (REVISED FOR SIMPLICITY) ---
     if view_mode == 'Card View':
-        # Define number of columns for the grid
-        num_columns = 3
+        # More columns for desktop since cards are smaller
+        num_columns = 4 
         cols = st.columns(num_columns)
         
-        # Paginate the data manually for card view
-        page_size = 21 # (3 columns * 7 rows)
-        page_number = st.number_input(label="Page", min_value=1, max_value=(len(filtered_df) // page_size) + 1, step=1, key="card_page")
+        # Adjust page size to fit the new grid
+        page_size = 24 # (4 columns * 6 rows)
+        total_pages = (len(filtered_df) // page_size) + 1
+        page_number = st.number_input(
+            label="Page", min_value=1, 
+            max_value=total_pages if total_pages > 0 else 1, 
+            step=1, key="card_page"
+        )
         start_index = (page_number - 1) * page_size
         end_index = start_index + page_size
         
         paginated_df = filtered_df.iloc[start_index:end_index]
 
-        # Iterate over the paginated data and display cards
+        # Iterate over the paginated data and display compact cards
         for index, row in paginated_df.reset_index().iterrows():
             col_index = index % num_columns
             with cols[col_index]:
                 with st.container(border=True):
-                    st.subheader(row.get('NAMA_PESERTA', 'N/A'))
-                    st.write(f"**Asal Sekolah:** {row.get('ASAL_SEKOLAH', 'N/A')}")
-                    st.write(f"**Pelatihan:** {row.get('NAMA_PELATIHAN', 'N/A')}")
+                    # Use markdown for more compact text
+                    st.markdown(f"**{row.get('NAMA_PESERTA', 'N/A')}**")
                     
-                    tanggal_str = pd.to_datetime(row.get('TANGGAL')).strftime('%d %B %Y') if pd.notna(row.get('TANGGAL')) else 'N/A'
-                    st.write(f"**Tanggal:** {tanggal_str}")
+                    # Truncate long school/training names for display
+                    school_name = str(row.get('ASAL_SEKOLAH', 'N/A'))
+                    training_name = str(row.get('NAMA_PELATIHAN', 'N/A'))
+                    
+                    st.markdown(f"<small><b>Sekolah:</b> {school_name[:25] + '...' if len(school_name) > 25 else school_name}</small>", unsafe_allow_html=True)
+                    st.markdown(f"<small><b>Pelatihan:</b> {training_name[:25] + '...' if len(training_name) > 25 else training_name}</small>", unsafe_allow_html=True)
+                    
+                    # Use a shorter date format
+                    tanggal_str = pd.to_datetime(row.get('TANGGAL')).strftime('%d %b %Y') if pd.notna(row.get('TANGGAL')) else 'N/A'
+                    st.markdown(f"<small><b>Tanggal:</b> {tanggal_str}</small>", unsafe_allow_html=True)
+                    
+                    st.write("") # small spacer
 
-                    # Button to show details, with a unique key for each card
-                    if st.button("Lihat Detail", key=f"detail_{row['index']}"):
+                    # Button to show details
+                    if st.button("Lihat Detail", key=f"detail_{row['index']}", use_container_width=True):
                         st.session_state.selected_participant_details = row.to_dict()
                         st.rerun()
 
@@ -285,8 +299,6 @@ def main_app():
     # --- DYNAMIC SUMMARY SECTION (Unchanged) ---
     st.markdown('---')
     st.subheader("Filter untuk Rekap Pencapaian")
-    # ... (The rest of your summary, upload, and footer code remains exactly the same)
-    # ... I am omitting it here for brevity, but you should keep it in your file.
     summary_col1, summary_col2 = st.columns(2)
     with summary_col1:
         summary_status_filter = st.multiselect(
@@ -364,7 +376,6 @@ def main_app():
     
     st.write("---")
     st.header("Upload Data Terbaru")
-    # ... (Your upload and footer section continues here)
     upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
     uploaded_file = st.file_uploader(f"Upload file CSV atau Excel untuk pelatihan '{upload_category}' (format sesuai template)", type=['csv', 'xlsx'])
     
