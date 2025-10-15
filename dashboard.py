@@ -229,8 +229,36 @@ def main_app():
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     grid_options = gb.build()
-    AgGrid(display_df_view, gridOptions=grid_options, update_mode=GridUpdateMode.SELECTION_CHANGED,
-           height=500, fit_columns_on_grid_load=True, reload_data=True, use_legacy_py_rendering=True)
+    
+    # --- FIX: CAPTURE THE GRID RESPONSE TO ENABLE SELECTION ---
+    grid_response = AgGrid(
+        display_df_view, 
+        gridOptions=grid_options, 
+        update_mode=GridUpdateMode.SELECTION_CHANGED,
+        height=500, 
+        fit_columns_on_grid_load=True, 
+        reload_data=True, 
+        use_legacy_py_rendering=True
+    )
+
+    # --- FIX: RE-INSTATED DETAIL VIEW LOGIC ---
+    selected = grid_response['selected_rows']
+    if selected:
+        selected_row = selected[0]
+        selected_name = selected_row.get('NAMA_PESERTA', 'N/A')
+        selected_school = selected_row.get('ASAL_SEKOLAH', 'N/A')
+
+        st.markdown("### Detail Peserta")
+        st.write(f"Semua pelatihan yang diikuti oleh: **{selected_name}** dari **{selected_school}**")
+
+        participant_trainings = filtered_df[
+            (filtered_df['NAMA_PESERTA'] == selected_name) &
+            (filtered_df['ASAL_SEKOLAH'] == selected_school)
+        ][['NAMA_PELATIHAN', 'TANGGAL', 'ASAL_SEKOLAH', 'NPSN']].drop_duplicates().reset_index(drop=True)
+        
+        participant_trainings.index += 1
+        st.dataframe(participant_trainings, use_container_width=True)
+        st.write(f"Jumlah pelatihan: {len(participant_trainings)}")
 
     st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
     st.markdown('---')
@@ -259,7 +287,6 @@ def main_app():
         filtered_school_data = filtered_school_data[filtered_school_data['KABUPATEN'].isin(summary_kabupaten_filter)]
 
     # 2. Recalculate TARGETS dynamically from the filtered school data
-    # --- FIX: REMOVED @st.cache_data decorator ---
     def get_dynamic_targets(filtered_df_sekolah):
         df_sekolah = filtered_df_sekolah[filtered_df_sekolah['TIPE'] != 'SLB'].copy()
         df_sekolah['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
