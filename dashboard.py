@@ -205,7 +205,7 @@ def main_app():
 
     filtered_df = df[pd.concat(conditions, axis=1).all(axis=1)] if conditions else df.copy()
 
-    # --- RE-INSTATED AGGRID TABLE DISPLAY ---
+    # --- AGGRID TABLE DISPLAY (RESTORED) ---
     st.write(f'Showing {len(filtered_df)} records')
 
     display_df = filtered_df.copy()
@@ -275,7 +275,6 @@ def main_app():
     # 3. Filter the ACHIEVEMENT data (from participants) using the same criteria
     npsn_to_show = filtered_school_data['NPSN'].astype(str).unique()
     
-    # Start with the main filtered data, then apply summary filters if any exist
     summary_df = filtered_df.copy()
     if summary_status_filter or summary_kabupaten_filter:
         summary_df = summary_df[summary_df['NPSN'].astype(str).isin(npsn_to_show)]
