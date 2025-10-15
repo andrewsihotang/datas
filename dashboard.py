@@ -255,17 +255,14 @@ def main_app():
             (filtered_df['ASAL_SEKOLAH'] == selected_school)
         ][['NAMA_PELATIHAN', 'TANGGAL', 'ASAL_SEKOLAH', 'NPSN']].drop_duplicates().reset_index(drop=True)
         
-        # --- FIX 1: Format the TANGGAL column before displaying ---
         participant_trainings['TANGGAL'] = pd.to_datetime(participant_trainings['TANGGAL']).dt.strftime('%Y-%m-%d')
         
         participant_trainings.index += 1
         st.dataframe(participant_trainings, use_container_width=True)
         st.write(f"Jumlah pelatihan: {len(participant_trainings)}")
 
-    st.markdown('*Data cutoff: 08 September 2025*')
-    st.markdown('---')
-    
     # --- DYNAMIC SUMMARY SECTION ---
+    st.markdown('---')
     st.subheader("Filter untuk Rekap Pencapaian")
     summary_col1, summary_col2 = st.columns(2)
     with summary_col1:
@@ -310,7 +307,6 @@ def main_app():
     # --- Display Summary Tables with Dynamic Targets ---
     prefix = pelatihan_choice if pelatihan_choice else "Keseluruhan"
     
-    # --- FIX 2: Create the list of Jenjang to display, excluding 'SLB' ---
     all_jenjang = sorted([j for j in df_sekolah_sumber['TIPE'].unique() if j != 'SLB'])
 
     summary_rows = []
@@ -347,7 +343,8 @@ def main_app():
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
     st.dataframe(df_summary_sekolah, use_container_width=True)
     
-    st.markdown('*Data cutoff: 08 September 2025*')
+    # --- FIX: Replaced hardcoded date with dynamic date ---
+    st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
     
     # --- Upload and Footer sections ---
     st.write("---")
@@ -384,15 +381,15 @@ def main_app():
         """
         <hr>
         <div style="text-align: center; margin-top: 20px;">
-            <a href="https://www.instagram.com/p4jakut_ks?igsh=c3Mya2dodm5hbHU1" target="_blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+            <a href="https://www.instagram.com/p4jakut_ks?igsh=c3Mya2dodm5hbHU1" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
                 <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/instagrams.png" alt="Instagram" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">Instagram P4 JUKS</div>
             </a>
-            <a href="https://www.tiktok.com/@p4.juks?_t=ZS-8zKsAgWjXJQ&_r=1" target="_blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+            <a href="https://www.tiktok.com/@p4.juks?_t=ZS-8zKsAgWjXJQ&_r=1" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
                 <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">TikTok P4 JUKS</div>
             </a>
-            <a href="https://youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="_blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+            <a href="https://youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
                 <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">YouTube P4 JUKS</div>
             </a>
