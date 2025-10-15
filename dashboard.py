@@ -203,11 +203,35 @@ def main_app():
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
 
-    filtered_df = df[pd.concat(conditions, axis=1).all(axis=1)] if conditions else df
+    filtered_df = df[pd.concat(conditions, axis=1).all(axis=1)] if conditions else df.copy()
 
-    # Display Main AgGrid Table
+    # --- RE-INSTATED AGGRID TABLE DISPLAY ---
     st.write(f'Showing {len(filtered_df)} records')
-    # ... (AgGrid display logic remains the same)
+
+    display_df = filtered_df.copy()
+    if "NO" in display_df.columns: display_df = display_df.drop(columns=["NO"])
+    display_df = display_df.reset_index(drop=True)
+    display_df.insert(0, "NO", range(1, len(display_df) + 1))
+    display_df['TANGGAL'] = display_df['TANGGAL'].dt.strftime('%Y-%m-%d')
+    if 'CATEGORY' in display_df.columns: display_df = display_df.drop(columns=['CATEGORY'])
+    cols = list(display_df.columns)
+    if 'STATUS_SEKOLAH' in cols and 'ASAL_SEKOLAH' in cols:
+        cols.remove('STATUS_SEKOLAH')
+        cols.insert(cols.index('ASAL_SEKOLAH') + 1, 'STATUS_SEKOLAH')
+        display_df = display_df[cols]
+
+    view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
+    compact_cols = ['NO', 'NAMA_PESERTA', 'ASAL_SEKOLAH', 'NAMA_PELATIHAN', 'TANGGAL']
+    display_df_view = display_df[[c for c in compact_cols if c in display_df.columns]] if view_mode == 'Compact Table View' else display_df
+    
+    gb = GridOptionsBuilder.from_dataframe(display_df_view)
+    gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
+    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
+    gb.configure_selection(selection_mode="single", use_checkbox=False)
+    grid_options = gb.build()
+    AgGrid(display_df_view, gridOptions=grid_options, update_mode=GridUpdateMode.SELECTION_CHANGED,
+           height=500, fit_columns_on_grid_load=True, reload_data=True, use_legacy_py_rendering=True)
+    # --- END OF RESTORED TABLE SECTION ---
 
     st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
     st.markdown('---')
@@ -237,8 +261,8 @@ def main_app():
 
     # 2. Recalculate TARGETS dynamically from the filtered school data
     @st.cache_data
-    def get_dynamic_targets(filtered_df_sekolah):
-        df_sekolah = filtered_df_sekolah[filtered_df_sekolah['TIPE'] != 'SLB'].copy()
+    def get_dynamic_targets(_filtered_df_sekolah):
+        df_sekolah = _filtered_df_sekolah[_filtered_df_sekolah['TIPE'] != 'SLB'].copy()
         df_sekolah['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
         df_sekolah['TENAGA_KEPENDIDIKAN'] = pd.to_numeric(df_sekolah['TENAGA_KEPENDIDIKAN'], errors='coerce').fillna(0).astype(int)
         df_sekolah['TARGET_PESERTA'] = df_sekolah['KEPALA_SEKOLAH'] + df_sekolah['TENAGA_KEPENDIDIKAN']
@@ -250,16 +274,16 @@ def main_app():
 
     # 3. Filter the ACHIEVEMENT data (from participants) using the same criteria
     npsn_to_show = filtered_school_data['NPSN'].astype(str).unique()
-    summary_df = filtered_df[filtered_df['NPSN'].astype(str).isin(npsn_to_show)]
-
-    # If no filters are applied, use the original filtered_df
-    if not summary_status_filter and not summary_kabupaten_filter:
-        summary_df = filtered_df.copy()
+    
+    # Start with the main filtered data, then apply summary filters if any exist
+    summary_df = filtered_df.copy()
+    if summary_status_filter or summary_kabupaten_filter:
+        summary_df = summary_df[summary_df['NPSN'].astype(str).isin(npsn_to_show)]
 
     # --- Display Summary Tables with Dynamic Targets ---
     prefix = pelatihan_choice if pelatihan_choice else "Keseluruhan"
     
-    all_jenjang = df_sekolah_sumber['TIPE'].unique()
+    all_jenjang = sorted(df_sekolah_sumber['TIPE'].unique())
 
     summary_rows = []
     for jenjang in all_jenjang:
@@ -297,10 +321,58 @@ def main_app():
     
     st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
     
-    # --- Upload and Footer sections remain the same ---
+    # --- Upload and Footer sections ---
     st.write("---")
-    # ... (the rest of the code for upload and footer is identical)
+    st.header("Upload Data Terbaru")
+    upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
+    uploaded_file = st.file_uploader(f"Upload file CSV atau Excel untuk pelatihan '{upload_category}' (format sesuai template)", type=['csv', 'xlsx'])
+    
+    if uploaded_file is not None:
+        try:
+            new_data = pd.read_csv(uploaded_file, sep=';') if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
+            st.write("Pratinjau data yang diunggah:")
+            st.dataframe(new_data)
+            expected_cols_base = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, upload_category).columns
+            if any(c not in new_data.columns for c in expected_cols_base):
+                st.error(f"File unggahan kehilangan beberapa kolom wajib. Kolom yang hilang: {', '.join(set(expected_cols_base) - set(new_data.columns))}")
+            else:
+                new_data = new_data.astype(str)
+                if st.button("Tambahkan data ke Google Sheet"):
+                    try:
+                        scopes = ['https://www.googleapis.com/auth/spreadsheets']
+                        creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
+                        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+                        client = gspread.authorize(creds)
+                        sheet = client.open_by_key(spreadsheet_id).worksheet(upload_category)
+                        sheet.append_rows(new_data[expected_cols_base].values.tolist(), value_input_option='USER_ENTERED')
+                        st.success(f"Data berhasil ditambahkan ke sheet '{upload_category}'!")
+                        st.cache_data.clear()
+                    except Exception as e:
+                        st.error(f"Gagal menambahkan data: {e}")
+        except Exception as e:
+            st.error(f"Gagal membaca file unggahan: {e}")
 
+    st.markdown(
+        """
+        <hr>
+        <div style="text-align: center; margin-top: 20px;">
+            <a href="https://www.instagram.com/p4jakut_ks?igsh=c3Mya2dodm5hbHU1" target="_blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/instagrams.png" alt="Instagram" width="32" height="32" />
+                <div style="font-size: 0.7rem; margin-top: 4px;">Instagram P4 JUKS</div>
+            </a>
+            <a href="https://www.tiktok.com/@p4.juks?_t=ZS-8zKsAgWjXJQ&_r=1" target="_blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
+                <div style="font-size: 0.7rem; margin-top: 4px;">TikTok P4 JUKS</div>
+            </a>
+            <a href="https://youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="_blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
+                <div style="font-size: 0.7rem; margin-top: 4px;">YouTube P4 JUKS</div>
+            </a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    
 # Main flow control
 if st.session_state.page == "landing":
     show_landing_page()
