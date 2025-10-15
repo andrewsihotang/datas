@@ -129,16 +129,20 @@ def main_app():
             reset_filters(filter_defaults)
             st.rerun()
 
-    # --- Data Loading Functions ---
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
         scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly']
         creds_dict = json.loads(json_keyfile_str)
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(creds)
-        sheet = client.open_by_key(spreadsheet_id).worksheet(sheet_name)
-        data = sheet.get_all_records()
+        
+        # This function call is what causes the SpreadsheetNotFound error
+        spreadsheet = client.open_by_key(spreadsheet_id)
+        
+        worksheet = spreadsheet.worksheet(sheet_name)
+        data = worksheet.get_all_records()
         df = pd.DataFrame(data)
+
         if not df.empty:
             df.columns = df.columns.str.strip()
             if 'TANGGAL' in df.columns:
@@ -167,24 +171,41 @@ def main_app():
         
         return jenjang_targets, sekolah_targets
 
-    # --- Load all data ---
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
     spreadsheet_id = '1_YeSK2goExnC8n6tlmoJFQDVEWZbncdBLx8S5k-ljc'
     
     sheet_names = ['Tendik', 'Pendidik', 'Kejuruan']
     dfs = []
-    for sheet_name in sheet_names:
-        df_sheet = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
-        dfs.append(df_sheet)
-    df = pd.concat(dfs, ignore_index=True)
     
     try:
+        for sheet_name in sheet_names:
+            try:
+                df_sheet = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name)
+                dfs.append(df_sheet)
+            except gspread.exceptions.WorksheetNotFound:
+                st.warning(f"Warning: The sheet named '{sheet_name}' was not found in the Google Sheet. Skipping.")
+                continue
+        
+        if not dfs:
+            st.error("No valid data sheets ('Tendik', 'Pendidik', 'Kejuruan') were found. Please check your Google Sheet file.")
+            st.stop()
+            
+        df = pd.concat(dfs, ignore_index=True)
+        
         jenjang_targets, sekolah_targets = load_target_data(json_keyfile_str, spreadsheet_id)
+
+    except gspread.exceptions.SpreadsheetNotFound:
+        st.error("Fatal Error: Spreadsheet not found. Please check the following:")
+        st.error("1. The `spreadsheet_id` in the code is correct.")
+        st.error("2. You have shared the Google Sheet with the service account email (check `st.secrets`).")
+        st.stop()
     except Exception as e:
-        st.error(f"Could not load or process target data from 'data_sekolah' sheet. Error: {e}")
-        jenjang_targets, sekolah_targets = {}, {}
+        st.error(f"An unexpected error occurred while loading data: {e}")
+        st.stop()
 
     st.title('Data Peserta Pelatihan')
+
+    # ... The rest of the code is unchanged as it depends on the data loading successfully ...
 
     # --- Filtering UI (Unchanged) ---
     with st.container():
@@ -310,7 +331,7 @@ def main_app():
     st.markdown('*Data cutoff: 15 Oktober 2025*')
     st.write("---")
 
-    # --- CORRECTED Multi-Sheet Upload Functionality ---
+    # --- Upload Functionality (Unchanged logic, now within the safe data loading block) ---
     st.header("Upload Data Terbaru")
     upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
     uploaded_file = st.file_uploader(
@@ -323,9 +344,6 @@ def main_app():
             st.write("Pratinjau data yang diunggah:")
             st.dataframe(new_data)
             
-            # --- FIX ---
-            # Get the exact column structure from the TARGET sheet, not the combined dataframe.
-            # This is the most reliable way to ensure column alignment.
             target_sheet_df = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, upload_category)
             expected_cols = target_sheet_df.columns.tolist()
             
@@ -342,7 +360,6 @@ def main_app():
                         client = gspread.authorize(creds)
                         sheet = client.open_by_key(spreadsheet_id).worksheet(upload_category)
                         
-                        # Reorder the new_data columns to match the sheet's order before appending
                         data_to_append = new_data[expected_cols].values.tolist()
                         sheet.append_rows(data_to_append, value_input_option='USER_ENTERED')
                         
