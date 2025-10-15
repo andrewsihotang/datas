@@ -155,17 +155,22 @@ def main_app():
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
 
-    # --- FIX: Remove duplicate columns that can result from concatenation ---
-    # This ensures that selecting a column like df['STATUS_SEKOLAH'] returns a Series, not a DataFrame.
+    # --- NEW ROBUST DATA CLEANING BLOCK ---
+    # 1. Standardize all column names to uppercase and strip whitespace
+    df.columns = [col.strip().upper() for col in df.columns]
+
+    # 2. Rename the specific typo if it exists after standardization
+    if 'STASUS_SEKOLAH' in df.columns:
+        df.rename(columns={'STASUS_SEKOLAH': 'STATUS_SEKOLAH'}, inplace=True)
+
+    # 3. NOW, remove duplicate columns. This is the crucial final step.
     df = df.loc[:, ~df.columns.duplicated(keep='first')]
+    # --- END OF CLEANING BLOCK ---
 
-
-    # --- Data Cleaning for Participant Data ---
+    # --- Continue with other data processing ---
     df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
     if 'NPSN' in df.columns:
         df['NPSN'] = df['NPSN'].astype(str)
-    if 'STASUS_SEKOLAH' in df.columns:
-        df.rename(columns={'STASUS_SEKOLAH': 'STATUS_SEKOLAH'}, inplace=True)
     if 'STATUS_SEKOLAH' not in df.columns:
         df['STATUS_SEKOLAH'] = pd.NA
         
@@ -255,10 +260,10 @@ def main_app():
     if pelatihan_filter:
         conditions.append(df['PELATIHAN'].isin(pelatihan_filter))
     if status_sekolah_filter:
+        # This will now correctly filter on the single, clean 'STATUS_SEKOLAH' column
         conditions.append(df['STATUS_SEKOLAH'].isin(status_sekolah_filter))
     if len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
-        # Make sure TANGGAL column is datetime for comparison
         df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
 
