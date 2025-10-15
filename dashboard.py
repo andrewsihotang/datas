@@ -155,6 +155,11 @@ def main_app():
         dfs.append(df_sheet)
     df = pd.concat(dfs, ignore_index=True)
 
+    # --- FIX: Remove duplicate columns that can result from concatenation ---
+    # This ensures that selecting a column like df['STATUS_SEKOLAH'] returns a Series, not a DataFrame.
+    df = df.loc[:, ~df.columns.duplicated(keep='first')]
+
+
     # --- Data Cleaning for Participant Data ---
     df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
     if 'NPSN' in df.columns:
@@ -169,23 +174,16 @@ def main_app():
     def get_dynamic_targets(json_keyfile_str, spreadsheet_id):
         df_sekolah_sumber = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, 'data_sekolah')
         
-        # --- FIX: Clean up column names to prevent KeyErrors ---
-        # This converts all column names to uppercase and removes leading/trailing spaces.
         df_sekolah_sumber.columns = [col.strip().upper() for col in df_sekolah_sumber.columns]
         
-        # Filter out 'SLB' as requested
-        # Now this line will work correctly even if the header in the sheet is 'tipe' or 'Tipe'
         df_sekolah_sumber = df_sekolah_sumber[df_sekolah_sumber['TIPE'] != 'SLB']
 
-        # Ensure target columns are numeric, coercing errors to NaN, then filling with 0
         df_sekolah_sumber['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah_sumber['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
         df_sekolah_sumber['TENAGA_KEPENDIDIKAN'] = pd.to_numeric(df_sekolah_sumber['TENAGA_KEPENDIDIKAN'], errors='coerce').fillna(0).astype(int)
 
-        # Calculate Participant Target: Sum of Kepala_Sekolah and Tenaga_Kependidikan per Tipe
         df_sekolah_sumber['TARGET_PESERTA'] = df_sekolah_sumber['KEPALA_SEKOLAH'] + df_sekolah_sumber['TENAGA_KEPENDIDIKAN']
         jenjang_targets = df_sekolah_sumber.groupby('TIPE')['TARGET_PESERTA'].sum().to_dict()
 
-        # Calculate School Target: Count of schools per Tipe
         sekolah_targets = df_sekolah_sumber['TIPE'].value_counts().to_dict()
         
         return jenjang_targets, sekolah_targets
@@ -233,6 +231,7 @@ def main_app():
                 key="pelatihan_filter",
                 default=st.session_state.get("pelatihan_filter", []))
         with col5:
+            # This line will now work correctly
             status_options = df['STATUS_SEKOLAH'].dropna().unique() if 'STATUS_SEKOLAH' in df.columns else []
             status_sekolah_filter = st.multiselect(
                 'STATUS SEKOLAH', 
@@ -341,7 +340,7 @@ def main_app():
         st.dataframe(participant_trainings)
         st.write(f"Jumlah pelatihan: {participant_trainings.shape[0]}")
 
-    st.markdown('*Data cutoff: 08 September 2025*')
+    st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
     st.markdown('---')
     
     # Determine title prefix based on filter selection
@@ -399,7 +398,7 @@ def main_app():
     df_sekolah = df_sekolah[['Jenjang', 'Target Jumlah Sekolah', 'Jumlah Sekolah (unique)', 'Persentase', 'Kurang']]
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
     st.dataframe(df_sekolah)
-    st.markdown('*Data cutoff: 08 September 2025*')
+    st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
     
     st.write("---")
     st.header("Upload Data Terbaru")
