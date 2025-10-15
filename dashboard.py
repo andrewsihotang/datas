@@ -240,10 +240,8 @@ def main_app():
         use_legacy_py_rendering=True
     )
 
-    # --- DETAIL VIEW LOGIC (CORRECTED) ---
+    # --- DETAIL VIEW LOGIC ---
     selected = grid_response['selected_rows']
-    
-    # --- FIX: Check if selected is not None BEFORE checking if it's empty ---
     if selected is not None and not selected.empty:
         selected_row = selected.iloc[0]
         selected_name = selected_row['NAMA_PESERTA']
@@ -268,9 +266,10 @@ def main_app():
     st.subheader("Filter untuk Rekap Pencapaian")
     summary_col1, summary_col2 = st.columns(2)
     with summary_col1:
+        # --- FIX: Use 'STATUS' column from the school data sheet ---
         summary_status_filter = st.multiselect(
             'Filter Status Sekolah (Negeri/Swasta)',
-            options=df_sekolah_sumber['STATUS_SEKOLAH'].dropna().unique(),
+            options=df_sekolah_sumber['STATUS'].dropna().unique(),
             key="summary_status_filter"
         )
     with summary_col2:
@@ -283,7 +282,8 @@ def main_app():
     # 1. Filter the SOURCE school data based on user selection
     filtered_school_data = df_sekolah_sumber.copy()
     if summary_status_filter:
-        filtered_school_data = filtered_school_data[filtered_school_data['STATUS_SEKOLAH'].isin(summary_status_filter)]
+        # --- FIX: Filter by the 'STATUS' column ---
+        filtered_school_data = filtered_school_data[filtered_school_data['STATUS'].isin(summary_status_filter)]
     if summary_kabupaten_filter:
         filtered_school_data = filtered_school_data[filtered_school_data['KABUPATEN'].isin(summary_kabupaten_filter)]
 
