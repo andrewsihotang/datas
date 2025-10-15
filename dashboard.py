@@ -230,7 +230,6 @@ def main_app():
     gb.configure_selection(selection_mode="single", use_checkbox=False)
     grid_options = gb.build()
     
-    # --- FIX: CAPTURE THE GRID RESPONSE TO ENABLE SELECTION ---
     grid_response = AgGrid(
         display_df_view, 
         gridOptions=grid_options, 
@@ -241,12 +240,15 @@ def main_app():
         use_legacy_py_rendering=True
     )
 
-    # --- FIX: RE-INSTATED DETAIL VIEW LOGIC ---
+    # --- DETAIL VIEW LOGIC (CORRECTED) ---
     selected = grid_response['selected_rows']
-    if selected:
-        selected_row = selected[0]
-        selected_name = selected_row.get('NAMA_PESERTA', 'N/A')
-        selected_school = selected_row.get('ASAL_SEKOLAH', 'N/A')
+    # The fix is to check 'if not selected.empty' instead of 'if selected'
+    if not selected.empty:
+        # Get the first row of the DataFrame
+        selected_row = selected.iloc[0]
+        # Access data like a dictionary from the row (which is a pandas Series)
+        selected_name = selected_row['NAMA_PESERTA']
+        selected_school = selected_row['ASAL_SEKOLAH']
 
         st.markdown("### Detail Peserta")
         st.write(f"Semua pelatihan yang diikuti oleh: **{selected_name}** dari **{selected_school}**")
