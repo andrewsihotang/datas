@@ -255,18 +255,20 @@ def main_app():
             (filtered_df['ASAL_SEKOLAH'] == selected_school)
         ][['NAMA_PELATIHAN', 'TANGGAL', 'ASAL_SEKOLAH', 'NPSN']].drop_duplicates().reset_index(drop=True)
         
+        # --- FIX 1: Format the TANGGAL column before displaying ---
+        participant_trainings['TANGGAL'] = pd.to_datetime(participant_trainings['TANGGAL']).dt.strftime('%Y-%m-%d')
+        
         participant_trainings.index += 1
         st.dataframe(participant_trainings, use_container_width=True)
         st.write(f"Jumlah pelatihan: {len(participant_trainings)}")
 
-    st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
+    st.markdown('*Data cutoff: 08 September 2025*')
     st.markdown('---')
     
     # --- DYNAMIC SUMMARY SECTION ---
     st.subheader("Filter untuk Rekap Pencapaian")
     summary_col1, summary_col2 = st.columns(2)
     with summary_col1:
-        # --- FIX: Use 'STATUS' column from the school data sheet ---
         summary_status_filter = st.multiselect(
             'Filter Status Sekolah (Negeri/Swasta)',
             options=df_sekolah_sumber['STATUS'].dropna().unique(),
@@ -282,7 +284,6 @@ def main_app():
     # 1. Filter the SOURCE school data based on user selection
     filtered_school_data = df_sekolah_sumber.copy()
     if summary_status_filter:
-        # --- FIX: Filter by the 'STATUS' column ---
         filtered_school_data = filtered_school_data[filtered_school_data['STATUS'].isin(summary_status_filter)]
     if summary_kabupaten_filter:
         filtered_school_data = filtered_school_data[filtered_school_data['KABUPATEN'].isin(summary_kabupaten_filter)]
@@ -309,7 +310,8 @@ def main_app():
     # --- Display Summary Tables with Dynamic Targets ---
     prefix = pelatihan_choice if pelatihan_choice else "Keseluruhan"
     
-    all_jenjang = sorted(df_sekolah_sumber['TIPE'].unique())
+    # --- FIX 2: Create the list of Jenjang to display, excluding 'SLB' ---
+    all_jenjang = sorted([j for j in df_sekolah_sumber['TIPE'].unique() if j != 'SLB'])
 
     summary_rows = []
     for jenjang in all_jenjang:
@@ -345,7 +347,7 @@ def main_app():
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
     st.dataframe(df_summary_sekolah, use_container_width=True)
     
-    st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
+    st.markdown('*Data cutoff: 08 September 2025*')
     
     # --- Upload and Footer sections ---
     st.write("---")
