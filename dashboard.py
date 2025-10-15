@@ -8,30 +8,30 @@ import plotly.graph_objects as go
 import plotly.express as px
 
 # --- CSS for layout and header/logo tweaks, no tall vertical spacing ---
+st.set_page_config(layout="wide") # Set the page to wide mode by default
+
 st.markdown("""
 <style>
-[data-testid="stAppViewContainer"] > .main {
-    max-width: 100vw;
-    padding-left: 20px;
-    padding-right: 20px;
-}
+/* General layout adjustments */
 .block-container {
-    max-width: 100vw;
+    max-width: 95vw;
     padding-top: 2rem;
     padding-bottom: 2rem;
     padding-left: 20px;
     padding-right: 20px;
 }
-.stDataFrameContainer, .css-1q8dd3e.e1fqkh3o4 {
-    max-width: 100vw !important;
+.stDataFrameContainer, .ag-root-wrapper {
+    max-width: 100% !important;
 }
 [data-testid="stSidebar"] {
     display: none;
 }
+/* Responsive font sizes for the table */
 @media (max-width: 700px) {
     .ag-root-wrapper, .ag-theme-streamlit input { font-size:11px !important; }
     .ag-header-cell-label, .ag-cell { font-size:10px !important; }
 }
+/* Header styling */
 .landing-header {
     width: 100%;
     display: flex;
@@ -55,6 +55,7 @@ st.markdown("""
     font-weight: 500;
     line-height: 1.1;
 }
+/* Centered content for landing page */
 .landing-centered-content {
     display: flex;
     flex-direction: column;
@@ -107,6 +108,7 @@ def show_landing_page():
     st.subheader("P4 Jakarta Utara dan Kepulauan Seribu")
     if st.button("Mulai"):
         st.session_state.page = "main"
+        st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 def reset_filters(options_dict):
@@ -119,6 +121,7 @@ def main_app():
     with colbtn1:
         if st.button("Refresh Data"):
             st.cache_data.clear()
+            st.rerun() # Use rerun to ensure the app state is refreshed
     with colbtn2:
         if st.button("Reset Filter"):
             filter_defaults = {
@@ -130,6 +133,8 @@ def main_app():
                 "date_range": []
             }
             reset_filters(filter_defaults)
+            st.rerun() # Use rerun to ensure the app state is refreshed
+
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
         scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly']
@@ -140,7 +145,8 @@ def main_app():
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
         df.columns = df.columns.str.strip()
-        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'])
+        # Ensure TANGGAL is datetime for filtering, but will be converted to string later for display
+        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
         if 'NPSN' in df.columns:
             df['NPSN'] = df['NPSN'].astype(str)
         if 'STASUS_SEKOLAH' in df.columns:
@@ -210,6 +216,7 @@ def main_app():
                 value=st.session_state.get("date_range", []), 
                 key="date_range"
             )
+
     conditions = []
     if jenjang_filter:
         conditions.append(df['JENJANG'].isin(jenjang_filter))
@@ -223,23 +230,30 @@ def main_app():
         conditions.append(df['STATUS_SEKOLAH'].isin(status_sekolah_filter))
     if len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
+        # Make sure TANGGAL column is datetime for comparison
+        df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
         conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
+
+    # Correctly combine boolean series for filtering
     if conditions:
-        filter_condition = conditions[0]
-        for cond in conditions[1:]:
+        filter_condition = pd.Series(True, index=df.index)
+        for cond in conditions:
             filter_condition &= cond
     else:
-        filter_condition = pd.Series([True] * len(df))
-    filtered_df = df[filter_condition]
-    # Remove NO column if it exists before inserting new one
+        filter_condition = pd.Series(True, index=df.index)
+
+    filtered_df = df[filter_condition].copy()
+    
     if "NO" in filtered_df.columns:
         filtered_df = filtered_df.drop(columns=["NO"])
     filtered_df = filtered_df.reset_index(drop=True)
     filtered_df.insert(0, "NO", range(1, len(filtered_df) + 1))
+    
     filtered_df['TANGGAL'] = filtered_df['TANGGAL'].dt.strftime('%Y-%m-%d')
-    # Remove the CATEGORY column if it exists
+    
     if 'CATEGORY' in filtered_df.columns:
         filtered_df = filtered_df.drop(columns=['CATEGORY'])
+    
     cols = list(filtered_df.columns)
     if 'STATUS_SEKOLAH' in cols and 'ASAL_SEKOLAH' in cols:
         cols.remove('STATUS_SEKOLAH')
@@ -248,13 +262,17 @@ def main_app():
         display_df = filtered_df[cols]
     else:
         display_df = filtered_df
+
     st.write(f'Showing {display_df.shape[0]} records')
+    
     view_mode = st.radio("Table view mode:", ['Full Table View', 'Compact Table View'], horizontal=True)
     if view_mode == 'Compact Table View':
-        compact_cols = ['NO', 'NAMA_PESERTA', 'NAMA_PELATIHAN', 'TANGGAL']
-        display_df_view = display_df[compact_cols].copy()
+        compact_cols = ['NO', 'NAMA_PESERTA', 'ASAL_SEKOLAH', 'NAMA_PELATIHAN', 'TANGGAL']
+        compact_cols_exist = [col for col in compact_cols if col in display_df.columns]
+        display_df_view = display_df[compact_cols_exist].copy()
     else:
         display_df_view = display_df.copy()
+
     gb = GridOptionsBuilder.from_dataframe(display_df_view)
     gb.configure_pagination(paginationAutoPageSize=False, paginationPageSize=20)
     gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
@@ -268,104 +286,61 @@ def main_app():
         fit_columns_on_grid_load=True,
         reload_data=True,
     )
+
     selected = grid_response['selected_rows']
     if selected is not None and len(selected) > 0:
         if isinstance(selected, pd.DataFrame):
             selected_list = selected.to_dict(orient='records')
         else:
             selected_list = selected
-        selected_name = selected_list[0].get('NAMA_PESERTA', '')
+        
+        selected_row = selected_list[0]
+        selected_name = selected_row.get('NAMA_PESERTA', '')
+        selected_school = selected_row.get('ASAL_SEKOLAH', '')
+
         st.markdown("### Detail Peserta")
-        st.write(f"Semua pelatihan yang diikuti oleh: **{selected_name}**")
-        participant_trainings = filtered_df[filtered_df['NAMA_PESERTA'] == selected_name][
+        st.write(f"Semua pelatihan yang diikuti oleh: **{selected_name}** dari **{selected_school}**")
+
+        participant_trainings = filtered_df[
+            (filtered_df['NAMA_PESERTA'] == selected_name) &
+            (filtered_df['ASAL_SEKOLAH'] == selected_school)
+        ][
             ['NAMA_PELATIHAN', 'TANGGAL', 'ASAL_SEKOLAH', 'NPSN']
         ].drop_duplicates().reset_index(drop=True)
+        
         participant_trainings.index = participant_trainings.index + 1
         st.dataframe(participant_trainings)
         st.write(f"Jumlah pelatihan: {participant_trainings.shape[0]}")
+
     st.markdown('*Data cutoff: 08 September 2025*')
     st.markdown('---')
-    # Determine which PELATIHAN is selected in pelatihan_filter
+    
     if pelatihan_filter and len(pelatihan_filter) == 1:
         selected_category = pelatihan_filter[0]
     else:
         selected_category = None
+        
     targets_by_category = {
         'Tendik': {
-            'jenjang': {
-                'DIKMAS': 85,
-                'PAUD': 76,
-                'SD': 1249,
-                'SMP': 945,
-                'SMA': 515,
-                'SMK': 461,
-            },
-            'sekolah': {
-                'PAUD': 44,
-                'DIKMAS': 60,
-                'SD': 350,
-                'SMP': 202,
-                'SMA': 95,
-                'SMK': 76,
-            },
+            'jenjang': {'DIKMAS': 85, 'PAUD': 76, 'SD': 1249, 'SMP': 945, 'SMA': 515, 'SMK': 461},
+            'sekolah': {'PAUD': 44, 'DIKMAS': 60, 'SD': 350, 'SMP': 202, 'SMA': 95, 'SMK': 76},
             'title_prefix': 'Tendik'
         },
         'Pendidik': {
-            'jenjang': {
-                'DIKMAS': 150,
-                'PAUD': 1000,
-                'SD': 1200,
-                'SMP': 900,
-                'SMA': 500,
-                'SMK': 450,
-            },
-            'sekolah': {
-                'PAUD': 400,
-                'DIKMAS': 80,
-                'SD': 350,
-                'SMP': 210,
-                'SMA': 90,
-                'SMK': 65,
-            },
+            'jenjang': {'DIKMAS': 150, 'PAUD': 1000, 'SD': 1200, 'SMP': 900, 'SMA': 500, 'SMK': 450},
+            'sekolah': {'PAUD': 400, 'DIKMAS': 80, 'SD': 350, 'SMP': 210, 'SMA': 90, 'SMK': 65},
             'title_prefix': 'Pendidik'
         },
         'Kejuruan': {
-            'jenjang': {
-                'DIKMAS': 100,
-                'PAUD': 200,
-                'SD': 300,
-                'SMP': 400,
-                'SMA': 250,
-                'SMK': 180,
-            },
-            'sekolah': {
-                'PAUD': 100,
-                'DIKMAS': 60,
-                'SD': 120,
-                'SMP': 80,
-                'SMA': 40,
-                'SMK': 30,
-            },
+            'jenjang': {'DIKMAS': 100, 'PAUD': 200, 'SD': 300, 'SMP': 400, 'SMA': 250, 'SMK': 180},
+            'sekolah': {'PAUD': 100, 'DIKMAS': 60, 'SD': 120, 'SMP': 80, 'SMA': 40, 'SMK': 30},
             'title_prefix': 'Kejuruan'
         }
     }
-    default_jenjang_targets = {
-        'DIKMAS': 85,
-        'PAUD': 76,
-        'SD': 1249,
-        'SMP': 945,
-        'SMA': 515,
-        'SMK': 416,
-    }
-    default_sekolah_targets = {
-        'PAUD': 44,
-        'DIKMAS': 60,
-        'SD': 350,
-        'SMP': 202,
-        'SMA': 95,
-        'SMK': 76,
-    }
+    default_jenjang_targets = {'DIKMAS': 85, 'PAUD': 76, 'SD': 1249, 'SMP': 945, 'SMA': 515, 'SMK': 416}
+    default_sekolah_targets = {'PAUD': 44, 'DIKMAS': 60, 'SD': 350, 'SMP': 202, 'SMA': 95, 'SMK': 76}
     default_prefix = "Tendik"
+
     if selected_category in targets_by_category:
         jenjang_targets = targets_by_category[selected_category]['jenjang']
         sekolah_targets = targets_by_category[selected_category]['sekolah']
@@ -374,7 +349,7 @@ def main_app():
         jenjang_targets = default_jenjang_targets
         sekolah_targets = default_sekolah_targets
         prefix = default_prefix
-    # Summary by Jenjang
+        
     summary_rows = []
     for jenjang, target in jenjang_targets.items():
         df_jenjang = filtered_df[
@@ -382,9 +357,11 @@ def main_app():
             (filtered_df['NPSN'].notna()) &
             (filtered_df['NPSN'].astype(str) != '0')
         ]
-        unique_count = df_jenjang['NAMA_PESERTA'].nunique()
-        percent = (unique_count / target * 100) if target else 0
-        kurang = max(0, target - unique_count) if unique_count < target else 0
+        
+        unique_count = df_jenjang.drop_duplicates(subset=['NAMA_PESERTA', 'ASAL_SEKOLAH']).shape[0]
+
+        percent = (unique_count / target * 100) if target > 0 else 0
+        kurang = max(0, target - unique_count)
         summary_rows.append({
             'Jenjang': jenjang,
             'Target Jumlah Peserta Pelatihan': f"{target:,} Orang",
@@ -398,10 +375,16 @@ def main_app():
                              'Jumlah Peserta Pelatihan (unique)', 'Persentase', 'Kurang']]
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
     st.dataframe(df_summary)
+
     chart_col1, chart_col2 = st.columns([1, 1])
     with chart_col1:
-        yearly_participants = filtered_df.groupby(filtered_df['TANGGAL'].str[:4])['NAMA_PESERTA'].nunique().reset_index()
-        yearly_participants.columns = ['YEAR', 'NAMA_PESERTA']
+        filtered_df_copy = filtered_df.copy()
+        filtered_df_copy['TANGGAL'] = pd.to_datetime(filtered_df_copy['TANGGAL'], errors='coerce')
+        filtered_df_copy['YEAR'] = filtered_df_copy['TANGGAL'].dt.year
+        yearly_participants = filtered_df_copy.groupby('YEAR').apply(
+            lambda x: x.drop_duplicates(subset=['NAMA_PESERTA', 'ASAL_SEKOLAH']).shape[0]
+        ).reset_index(name='NAMA_PESERTA')
+        
         fig_yearly = go.Figure(data=[go.Bar(
             x=yearly_participants['YEAR'],
             y=yearly_participants['NAMA_PESERTA'],
@@ -415,13 +398,13 @@ def main_app():
             yaxis_title='Jumlah',
             template='plotly_white',
             height=350,
-            width=430
         )
-        st.plotly_chart(fig_yearly, use_container_width=False)
+        st.plotly_chart(fig_yearly, use_container_width=True)
+
     with chart_col2:
         pie_data = df_summary.copy()
         pie_data['UniqueValue'] = (
-            pie_data['Jumlah Peserta Pelatihan (unique)'].str.replace(' Orang', '', regex=False).replace('', '0').astype(int)
+            pie_data['Jumlah Peserta Pelatihan (unique)'].str.replace(' Orang', '', regex=False).str.replace(',', '').replace('', '0').astype(int)
         )
         fig_pie = px.pie(
             pie_data,
@@ -433,11 +416,10 @@ def main_app():
         fig_pie.update_layout(
             showlegend=True,
             height=350,
-            width=430,
             title={'text':'Proporsi Jumlah Peserta (unique) per Jenjang', 'x':0.5, 'xanchor':'center'}
         )
-        st.plotly_chart(fig_pie, use_container_width=False)
-    # Summary by Jumlah Sekolah with updated logic for capping percentage and count
+        st.plotly_chart(fig_pie, use_container_width=True)
+        
     sekolah_rows = []
     for jenjang, target in sekolah_targets.items():
         df_sekolah = filtered_df[
@@ -446,9 +428,9 @@ def main_app():
             (filtered_df['ASAL_SEKOLAH'] != '')
         ]
         unique_sekolah_count = df_sekolah['ASAL_SEKOLAH'].nunique()
-        capped_count = unique_sekolah_count if unique_sekolah_count <= target else target
-        percent = (capped_count / target * 100) if target else 0
-        kurang = max(0, target - unique_sekolah_count) if unique_sekolah_count < target else 0
+        capped_count = min(unique_sekolah_count, target)
+        percent = (capped_count / target * 100) if target > 0 else 0
+        kurang = max(0, target - unique_sekolah_count)
         sekolah_rows.append({
             'Jenjang': jenjang,
             'Target Jumlah Sekolah': f"{target:,} Sekolah",
@@ -460,8 +442,9 @@ def main_app():
     df_sekolah.index = df_sekolah.index + 1
     df_sekolah = df_sekolah[['Jenjang', 'Target Jumlah Sekolah', 'Jumlah Sekolah (unique)', 'Persentase', 'Kurang']]
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
-    st.markdown('*Data cutoff: 08 September 2025*')
     st.dataframe(df_sekolah)
+    st.markdown('*Data cutoff: 08 September 2025*')
+    
     st.write("---")
     st.header("Upload Data Terbaru")
     upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
@@ -477,12 +460,16 @@ def main_app():
                 new_data = pd.read_excel(uploaded_file)
             st.write("Pratinjau data yang diunggah:")
             st.dataframe(new_data)
-            expected_columns = df.columns.tolist()
-            if not all(col in new_data.columns for col in expected_columns):
-                st.error(f"File unggahan kehilangan beberapa kolom wajib: {expected_columns}")
+
+            expected_cols_base = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, upload_category).columns
+            missing_cols = [col for col in expected_cols_base if col not in new_data.columns]
+            
+            if missing_cols:
+                 st.error(f"File unggahan kehilangan beberapa kolom wajib. Kolom yang hilang: {', '.join(missing_cols)}")
             else:
                 for col in new_data.select_dtypes(include=['datetime64', 'datetimetz']).columns:
                     new_data[col] = new_data[col].dt.strftime('%Y-%m-%d')
+                
                 if st.button("Tambahkan data ke Google Sheet"):
                     try:
                         scopes = ['https://www.googleapis.com/auth/spreadsheets']
@@ -490,22 +477,17 @@ def main_app():
                         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
                         client = gspread.authorize(creds)
                         sheet = client.open_by_key(spreadsheet_id).worksheet(upload_category)
-                        existing_data = sheet.get_all_values()
-                        if len(existing_data) == 0:
-                            combined_data = [new_data.columns.values.tolist()] + new_data.values.tolist()
-                        else:
-                            existing_rows = existing_data[1:]
-                            existing_df = pd.DataFrame(existing_rows, columns=existing_data[0])
-                            combined_df = pd.concat([existing_df, new_data], ignore_index=True)
-                            combined_data = [combined_df.columns.values.tolist()] + combined_df.values.tolist()
-                        sheet.clear()
-                        sheet.update(combined_data)
+                        
+                        # Append rows without headers, ensuring order matches the sheet
+                        sheet.append_rows(new_data[expected_cols_base].values.tolist(), value_input_option='USER_ENTERED')
+
                         st.success(f"Data berhasil ditambahkan ke sheet '{upload_category}'!")
-                        load_data_from_gsheets.clear()
+                        st.cache_data.clear()
                     except Exception as e:
                         st.error(f"Gagal menambahkan data: {e}")
         except Exception as e:
             st.error(f"Gagal membaca file unggahan: {e}")
+
     st.markdown(
         """
         <hr>
@@ -526,6 +508,7 @@ def main_app():
         """,
         unsafe_allow_html=True,
     )
+    
 # Main flow control
 if st.session_state.page == "landing":
     show_landing_page()
