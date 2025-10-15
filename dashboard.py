@@ -181,6 +181,10 @@ def main_app():
         
         df_sekolah_sumber.columns = [col.strip().upper() for col in df_sekolah_sumber.columns]
         
+        # --- FIX: Remove rows with blank or invalid 'TIPE' to prevent anomalous summary rows ---
+        df_sekolah_sumber['TIPE'].replace('', pd.NA, inplace=True)
+        df_sekolah_sumber.dropna(subset=['TIPE'], inplace=True)
+
         df_sekolah_sumber = df_sekolah_sumber[df_sekolah_sumber['TIPE'] != 'SLB']
 
         df_sekolah_sumber['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah_sumber['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
