@@ -303,30 +303,6 @@ def main_app():
             st.session_state.selected_participant_details = selected.iloc[0].to_dict()
 
     # --- DETAIL VIEW LOGIC (Used by both Card and Table views) ---
-    # if 'selected_participant_details' in st.session_state and st.session_state.selected_participant_details:
-    #     with st.container(border=True):
-    #         selected_row = st.session_state.selected_participant_details
-    #         selected_name = selected_row.get('NAMA_PESERTA', 'N/A')
-    #         selected_school = selected_row.get('ASAL_SEKOLAH', 'N/A')
-
-    #         st.markdown("### Detail Peserta")
-    #         st.write(f"Semua pelatihan yang diikuti oleh: **{selected_name}** dari **{selected_school}**")
-
-    #         participant_trainings = df[
-    #             (df['NAMA_PESERTA'] == selected_name) &
-    #             (df['ASAL_SEKOLAH'] == selected_school)
-    #         ][['NAMA_PELATIHAN', 'TANGGAL', 'ASAL_SEKOLAH', 'NPSN']].drop_duplicates().reset_index(drop=True)
-            
-    #         participant_trainings['TANGGAL'] = pd.to_datetime(participant_trainings['TANGGAL']).dt.strftime('%Y-%m-%d')
-    #         participant_trainings.index += 1
-    #         st.dataframe(participant_trainings, use_container_width=True)
-    #         st.write(f"Jumlah pelatihan: {len(participant_trainings)}")
-            
-    #         if st.button("Tutup Detail"):
-    #             del st.session_state.selected_participant_details
-    #             st.rerun()
-
-   # --- DETAIL VIEW LOGIC (Used by both Card and Table views) ---
     if 'selected_participant_details' in st.session_state and st.session_state.selected_participant_details:
         with st.container(border=True):
             selected_row = st.session_state.selected_participant_details
@@ -355,7 +331,7 @@ def main_app():
             if st.button("Tutup Detail"):
                 del st.session_state.selected_participant_details
                 st.rerun()
-                
+
     # --- DYNAMIC SUMMARY SECTION (Unchanged) ---
     st.markdown('---')
     st.subheader("Filter untuk Rekap Pencapaian")
@@ -379,16 +355,33 @@ def main_app():
     if summary_kabupaten_filter:
         filtered_school_data = filtered_school_data[filtered_school_data['KABUPATEN'].isin(summary_kabupaten_filter)]
 
-    def get_dynamic_targets(filtered_df_sekolah):
+    # ==================================================================
+    # === PERUBAHAN 1: Modifikasi Fungsi get_dynamic_targets ===
+    # ==================================================================
+    def get_dynamic_targets(filtered_df_sekolah, pelatihan_filter_choice):
         df_sekolah = filtered_df_sekolah[filtered_df_sekolah['TIPE'] != 'SLB'].copy()
+        
+        # Konversi semua kolom target potensial ke numerik
         df_sekolah['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
         df_sekolah['TENAGA_KEPENDIDIKAN'] = pd.to_numeric(df_sekolah['TENAGA_KEPENDIDIKAN'], errors='coerce').fillna(0).astype(int)
-        df_sekolah['TARGET_PESERTA'] = df_sekolah['KEPALA_SEKOLAH'] + df_sekolah['TENAGA_KEPENDIDIKAN']
+        df_sekolah['GURU'] = pd.to_numeric(df_sekolah['GURU'], errors='coerce').fillna(0).astype(int) # TAMBAHAN BARU
+
+        # --- LOGIKA BARU BERDASARKAN PILIHAN FILTER ---
+        if pelatihan_filter_choice == 'Pendidik':
+            df_sekolah['TARGET_PESERTA'] = df_sekolah['GURU']
+        else: 
+            # Default untuk Tendik, Kejuruan (skip), dan Keseluruhan (None)
+            df_sekolah['TARGET_PESERTA'] = df_sekolah['KEPALA_SEKOLAH'] + df_sekolah['TENAGA_KEPENDIDIKAN']
+        # --- AKHIR LOGIKA BARU ---
+
         jenjang_targets = df_sekolah.groupby('TIPE')['TARGET_PESERTA'].sum().to_dict()
         sekolah_targets = df_sekolah.groupby('TIPE').size().to_dict()
         return jenjang_targets, sekolah_targets
 
-    jenjang_targets, sekolah_targets = get_dynamic_targets(filtered_school_data)
+    # ==================================================================
+    # === PERUBAHAN 2: Modifikasi Cara Pemanggilan Fungsi ===
+    # ==================================================================
+    jenjang_targets, sekolah_targets = get_dynamic_targets(filtered_school_data, pelatihan_choice)
     npsn_to_show = filtered_school_data['NPSN'].astype(str).unique()
     
     summary_df = filtered_df.copy()
@@ -451,7 +444,7 @@ def main_app():
                 new_data = new_data.astype(str)
                 if st.button("Tambahkan data ke Google Sheet"):
                     try:
-                        scopes = ['https://www.googleapis.com/auth/spreadsheets']
+                        scopes = ['https.www.googleapis.com/auth/spreadsheets']
                         creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
                         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
                         client = gspread.authorize(creds)
@@ -472,12 +465,12 @@ def main_app():
                 <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/instagrams.png" alt="Instagram" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">Instagram P4 JUKS</div>
             </a>
-            <a href="https://www.tiktok.com/@p4.juks?_t=ZS-8zKsAgWjXJQ&_r=1" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+            <a href="https.www.tiktok.com/@p4.juks?_t=ZS-8zKsAgWjXJQ&_r=1" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
                 <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">TikTok P4 JUKS</div>
             </a>
-            <a href="https://youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
-                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
+            <a href="https.youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+                <img src="https.raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">YouTube P4 JUKS</div>
             </a>
         </div>
@@ -493,6 +486,3 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
-
-
-
