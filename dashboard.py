@@ -572,7 +572,7 @@ def main_app():
                 <div style="font-size: 0.7rem; margin-top: 4px;">Instagram P4 JUKS</div>
             </a>
             <a href="https://www.tiktok.com/@p4.juks?_t=ZS-8zKsAgWjXJQ&_r=1" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
-                <img src="httpsentry_point-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.Request: GET https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
+                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">TikTok P4 JUKS</div>
             </a>
             <a href="https://youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
@@ -592,3 +592,4 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
