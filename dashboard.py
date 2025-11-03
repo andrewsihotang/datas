@@ -462,7 +462,12 @@ def main_app():
         school_list_df = school_list_df.merge(df_sekolah_sumber[['NPSN', 'STATUS', 'KECAMATAN']], on='NPSN', how='left')
         
         # 4. Hapus sekolah yang tidak memiliki data Status atau Kecamatan
-        school_list_df = school_list_df.dropna(subset=['STATUS', 'KECAMATAN']) 
+        school_list_df = school_list_df.dropna(subset=['STATUS', 'KECAMATAN'])
+
+        # --- TAMBAHKAN BLOK INI UNTUK MEMBERSIHKAN PREFIKS ---
+        if 'KECAMATAN' in school_list_df.columns:
+            school_list_df['KECAMATAN'] = school_list_df['KECAMATAN'].astype(str).str.replace("KEC. ", "").str.strip()
+        # --- AKHIR BLOK TAMBAHAN ---
     except Exception as e:
         st.error(f"Gagal memproses daftar sekolah untuk filter: {e}")
         school_list_df = pd.DataFrame(columns=['ASAL_SEKOLAH', 'NPSN', 'STATUS', 'KECAMATAN'])
@@ -591,4 +596,5 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
 
