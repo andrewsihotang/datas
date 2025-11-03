@@ -359,19 +359,27 @@ def main_app():
     # === PERUBAHAN 1: Modifikasi Fungsi get_dynamic_targets ===
     # ==================================================================
     def get_dynamic_targets(filtered_df_sekolah, pelatihan_filter_choice):
-        df_sekolah = filtered_df_sekolah[filtered_df_sekolah['TIPE'] != 'SLB'].copy()
+        df_sekolah = filtered_df_sekolah.copy() # Mulai dengan semua data
+        
+        # --- LOGIKA BARU UNTUK SLB ---
+        # HANYA filter SLB jika filter BUKAN Pendidik
+        if pelatihan_filter_choice != 'Pendidik':
+            df_sekolah = df_sekolah[df_sekolah['TIPE'] != 'SLB'].copy()
+        # Jika 'Pendidik', biarkan SLB tetap ada di dataframe
         
         # Konversi semua kolom target potensial ke numerik
         df_sekolah['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
         df_sekolah['TENAGA_KEPENDIDIKAN'] = pd.to_numeric(df_sekolah['TENAGA_KEPENDIDIKAN'], errors='coerce').fillna(0).astype(int)
-        df_sekolah['GURU'] = pd.to_numeric(df_sekolah['GURU'], errors='coerce').fillna(0).astype(int) # TAMBAHAN BARU
+        df_sekolah['GURU'] = pd.to_numeric(df_sekolah['GURU'], errors='coerce').fillna(0).astype(int)
 
         # --- LOGIKA BARU BERDASARKAN PILIHAN FILTER ---
         if pelatihan_filter_choice == 'Pendidik':
             df_sekolah['TARGET_PESERTA'] = df_sekolah['GURU']
+            # Ini sekarang akan secara otomatis menghitung target 'SLB' menggunakan kolom 'GURU'
         else: 
-            # Default untuk Tendik, Kejuruan (skip), dan Keseluruhan (None)
+            # Default untuk Tendik, Kejuruan, dan Keseluruhan (None)
             df_sekolah['TARGET_PESERTA'] = df_sekolah['KEPALA_SEKOLAH'] + df_sekolah['TENAGA_KEPENDIDIKAN']
+            # Ini aman karena 'SLB' sudah difilter di atas untuk kasus 'else'
         # --- AKHIR LOGIKA BARU ---
 
         jenjang_targets = df_sekolah.groupby('TIPE')['TARGET_PESERTA'].sum().to_dict()
@@ -389,7 +397,18 @@ def main_app():
         summary_df = summary_df[summary_df['NPSN'].astype(str).isin(npsn_to_show)]
 
     prefix = pelatihan_choice if pelatihan_choice else "Keseluruhan"
-    all_jenjang = sorted([j for j in df_sekolah_sumber['TIPE'].unique() if j != 'SLB'])
+    
+    # ==================================================================
+    # === PERUBAHAN 3: Logika Dinamis untuk all_jenjang ===
+    # ==================================================================
+    all_jenjang_from_source = sorted(df_sekolah_sumber['TIPE'].dropna().unique())
+    
+    if pelatihan_choice == 'Pendidik':
+        all_jenjang = all_jenjang_from_source # Daftar ini akan menyertakan SLB
+    else:
+        all_jenjang = [j for j in all_jenjang_from_source if j != 'SLB'] # Daftar ini membuang SLB
+    # ==================================================================
+
 
     summary_rows = []
     for jenjang in all_jenjang:
@@ -444,7 +463,7 @@ def main_app():
                 new_data = new_data.astype(str)
                 if st.button("Tambahkan data ke Google Sheet"):
                     try:
-                        scopes = ['https.www.googleapis.com/auth/spreadsheets']
+                        scopes = ['https://www.googleapis.com/auth/spreadsheets']
                         creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
                         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
                         client = gspread.authorize(creds)
@@ -465,12 +484,12 @@ def main_app():
                 <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/instagrams.png" alt="Instagram" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">Instagram P4 JUKS</div>
             </a>
-            <a href="https.www.tiktok.com/@p4.juks?_t=ZS-8zKsAgWjXJQ&_r=1" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+            <a href="https://www.tiktok.com/@p4.juks?_t=ZS-8zKsAgWjXJQ&_r=1" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
                 <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">TikTok P4 JUKS</div>
             </a>
-            <a href="https.youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
-                <img src="https.raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
+            <a href="https://youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">YouTube P4 JUKS</div>
             </a>
         </div>
