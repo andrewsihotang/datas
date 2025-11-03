@@ -129,7 +129,8 @@ def main_app():
                 "jenjang_filter": [], "kecamatan_filter": [], "nama_pelatihan_filter": [],
                 "pelatihan_filter": [], "status_sekolah_filter": [], "date_range": [],
                 "summary_status_filter": [], "summary_kabupaten_filter": [],
-                "reco_status_filter": [], "reco_kec_filter": [], "reco_school_select": "-- Pilih Sekolah --"
+                "reco_status_filter": [], "reco_kec_filter": [], "reco_school_select": "-- Pilih Sekolah --",
+                "rekap_pelatihan_filter": "Keseluruhan" # Tambahkan reset untuk filter rekap baru
             }
             reset_filters(filter_defaults)
             st.rerun()
@@ -145,9 +146,6 @@ def main_app():
         df = pd.DataFrame(data)
         return df
 
-    # ==================================================================
-    # === PERUBAHAN PADA load_school_data ===
-    # ==================================================================
     @st.cache_data
     def load_school_data(json_keyfile_str, spreadsheet_id):
         df_sekolah = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, 'data_sekolah')
@@ -158,11 +156,9 @@ def main_app():
             df_sekolah['NPSN'] = df_sekolah['NPSN'].astype(str)
         if 'KECAMATAN' in df_sekolah.columns:
             df_sekolah['KECAMATAN'] = df_sekolah['KECAMATAN'].astype(str)
-        # Pastikan KABUPATEN juga string untuk perbandingan
         if 'KABUPATEN' in df_sekolah.columns:
             df_sekolah['KABUPATEN'] = df_sekolah['KABUPATEN'].astype(str)
         return df_sekolah
-    # ==================================================================
 
     @st.cache_data
     def load_dapodik_data(json_keyfile_str, spreadsheet_id):
@@ -200,8 +196,6 @@ def main_app():
     if 'NAMA_PESERTA' in df.columns:
         df['NAMA_PESERTA'] = df['NAMA_PESERTA'].astype(str).str.strip()
 
-    pelatihan_choice = st.session_state.get("pelatihan_filter", [None])[0] if len(st.session_state.get("pelatihan_filter", [])) == 1 else None
-
     # --- PEMBUATAN TAB ---
     tab_data_peserta, tab_rekap, tab_rekomendasi, tab_upload = st.tabs([
         "📊 Data Peserta Pelatihan", 
@@ -212,11 +206,12 @@ def main_app():
 
     # --- TAB 1: DATA PESERTA PELATIHAN ---
     with tab_data_peserta:
+        # Tentukan pilihan tunggal dari multiselect HANYA untuk judul tab ini
+        pelatihan_choice_tab1 = st.session_state.get("pelatihan_filter", [None])[0] if len(st.session_state.get("pelatihan_filter", [])) == 1 else None
         title_map = {'Tendik': 'Data Peserta Pelatihan Tenaga Kependidikan', 'Pendidik': 'Data Peserta Pelatihan Pendidik', 'Kejuruan': 'Data Peserta Pelatihan Kejuruan'}
-        main_title = title_map.get(pelatihan_choice, 'Data Peserta Pelatihan Tenaga Kependidikan')
+        main_title = title_map.get(pelatihan_choice_tab1, 'Data Peserta Pelatihan Tenaga Kependidikan')
         st.title(main_title)
 
-        # ... (Kode untuk filter, search, card view, table view, detail view tetap SAMA) ...
         # --- Filters ---
         with st.container():
             col1, col2, col3 = st.columns(3)
@@ -346,6 +341,17 @@ def main_app():
     # --- TAB 2: REKAP PENCAPAIAN ---
     with tab_rekap:
         st.subheader("Filter untuk Rekap Pencapaian")
+
+        # ==================================================================
+        # === FILTER PELATIHAN BARU UNTUK TAB REKAP ===
+        # ==================================================================
+        rekap_pelatihan_choice = st.selectbox(
+            "Pilih Kategori Pelatihan untuk Rekap",
+            options=["Keseluruhan", "Pendidik", "Tendik", "Kejuruan"],
+            key="rekap_pelatihan_filter"
+        )
+        # ==================================================================
+
         summary_col1, summary_col2 = st.columns(2)
         with summary_col1:
             summary_status_filter = st.multiselect(
@@ -360,7 +366,6 @@ def main_app():
                 key="summary_kabupaten_filter"
             )
 
-        # ... (Sisa kode untuk rekap pencapaian tetap SAMA) ...
         filtered_school_data = df_sekolah_sumber.copy()
         if summary_status_filter:
             filtered_school_data = filtered_school_data[filtered_school_data['STATUS'].isin(summary_status_filter)]
@@ -382,21 +387,34 @@ def main_app():
             sekolah_targets = df_sekolah.groupby('TIPE').size().to_dict()
             return jenjang_targets, sekolah_targets
 
-        jenjang_targets, sekolah_targets = get_dynamic_targets(filtered_school_data, pelatihan_choice)
+        # ==================================================================
+        # === LOGIKA REKAP DIPERBARUI ===
+        # ==================================================================
+        # Gunakan filter rekap_pelatihan_choice dari tab ini
+        jenjang_targets, sekolah_targets = get_dynamic_targets(filtered_school_data, rekap_pelatihan_choice)
         npsn_to_show = filtered_school_data['NPSN'].astype(str).unique()
         
-        summary_df = filtered_df.copy()
+        # Buat dataframe baru untuk rekap, dimulai dari data lengkap
+        summary_df = df.copy() 
+        # Terapkan filter pelatihan dari selectbox tab ini
+        if rekap_pelatihan_choice != "Keseluruhan":
+            summary_df = summary_df[summary_df['PELATIHAN'] == rekap_pelatihan_choice]
+
+        # Terapkan filter Status/Kabupaten (jika ada)
         if summary_status_filter or summary_kabupaten_filter:
             summary_df = summary_df[summary_df['NPSN'].astype(str).isin(npsn_to_show)]
 
-        prefix = pelatihan_choice if pelatihan_choice else "Keseluruhan"
+        # Gunakan rekap_pelatihan_choice untuk prefix
+        prefix = rekap_pelatihan_choice
         
         all_jenjang_from_source = sorted(df_sekolah_sumber['TIPE'].dropna().unique())
         
-        if pelatihan_choice == 'Pendidik':
+        # Gunakan rekap_pelatihan_choice untuk logika SLB
+        if rekap_pelatihan_choice == 'Pendidik':
             all_jenjang = all_jenjang_from_source
         else:
             all_jenjang = [j for j in all_jenjang_from_source if j != 'SLB']
+        # ==================================================================
 
         summary_rows = []
         for jenjang in all_jenjang:
@@ -440,15 +458,8 @@ def main_app():
         try:
             school_list_df = df[['NPSN', 'ASAL_SEKOLAH']].dropna(subset=['NPSN'])
             school_list_df = school_list_df.drop_duplicates(subset=['NPSN'], keep='first')
-            
-            # ==================================================================
-            # === PERUBAHAN PADA TAB REKOMENDASI (MERGE) ===
-            # ==================================================================
-            # 1. Merge untuk mendapatkan KABUPATEN
             school_list_df = school_list_df.merge(df_sekolah_sumber[['NPSN', 'STATUS', 'KECAMATAN', 'KABUPATEN']], on='NPSN', how='left')
-            # 2. Hapus data yang tidak lengkap (termasuk KABUPATEN)
             school_list_df = school_list_df.dropna(subset=['STATUS', 'KECAMATAN', 'KABUPATEN']) 
-            # ==================================================================
 
             if 'KECAMATAN' in school_list_df.columns:
                 school_list_df['KECAMATAN'] = school_list_df['KECAMATAN'].astype(str).str.replace("KEC. ", "").str.strip()
@@ -464,31 +475,34 @@ def main_app():
                 key="reco_status_filter"
             )
         with reco_col2:
-            # ==================================================================
-            # === PERUBAHAN PADA TAB REKOMENDASI (FILTER OPSI) ===
-            # ==================================================================
-            # 3. Tentukan daftar kabupaten target
             target_kabupaten = ['KOTA ADM. JAKARTA UTARA', 'KAB. ADM. KEP. SERIBU']
-            
-            # 4. Buat daftar opsi kecamatan HANYA dari kabupaten target
             kecamatan_options = school_list_df[
                 school_list_df['KABUPATEN'].isin(target_kabupaten)
             ]['KECAMATAN'].unique()
 
             kec_reco_filter = st.multiselect(
                 "Filter Kecamatan",
-                options=sorted(kecamatan_options), # Tampilkan daftar yang sudah difilter
+                options=sorted(kecamatan_options),
                 key="reco_kec_filter"
             )
-            # ==================================================================
 
         filtered_schools_for_reco = school_list_df.copy()
         if status_reco_filter:
             filtered_schools_for_reco = filtered_schools_for_reco[filtered_schools_for_reco['STATUS'].isin(status_reco_filter)]
         if kec_reco_filter:
             filtered_schools_for_reco = filtered_schools_for_reco[filtered_schools_for_reco['KECAMATAN'].isin(kec_reco_filter)]
+        
+        # JIKA FILTER KECAMATAN KOSONG, TAMPILKAN SEMUA SEKOLAH (SESUAI FILTER STATUS)
+        # JIKA FILTER KECAMATAN DIISI, MAKA TAMPILKAN SEKOLAH YANG SESUAI
+        # INI MENCEGAH DAFTAR SEKOLAH KOSONG JIKA KECAMATAN BELUM DIPILIH
+        display_schools_df = filtered_schools_for_reco
+        if not kec_reco_filter: # Jika filter kecamatan kosong
+            temp_df_status_only = school_list_df.copy()
+            if status_reco_filter: # Terapkan filter status jika ada
+                 temp_df_status_only = temp_df_status_only[temp_df_status_only['STATUS'].isin(status_reco_filter)]
+            display_schools_df = temp_df_status_only
 
-        school_name_list = ["-- Pilih Sekolah --"] + sorted(filtered_schools_for_reco['ASAL_SEKOLAH'].unique())
+        school_name_list = ["-- Pilih Sekolah --"] + sorted(display_schools_df['ASAL_SEKOLAH'].unique())
         selected_school_name = st.selectbox(
             "Pilih Sekolah",
             school_name_list,
@@ -497,8 +511,8 @@ def main_app():
 
         if selected_school_name != "-- Pilih Sekolah --":
             try:
-                selected_npsn = str(filtered_schools_for_reco[
-                    filtered_schools_for_reco['ASAL_SEKOLAH'] == selected_school_name
+                selected_npsn = str(display_schools_df[
+                    display_schools_df['ASAL_SEKOLAH'] == selected_school_name
                 ].iloc[0]['NPSN'])
                 
                 df_dapodik = load_dapodik_data(json_keyfile_str, spreadsheet_id)
@@ -529,7 +543,6 @@ def main_app():
         upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
         uploaded_file = st.file_uploader(f"Upload file CSV atau Excel untuk pelatihan '{upload_category}' (format sesuai template)", type=['csv', 'xlsx'])
         
-        # ... (Kode untuk upload data tetap SAMA) ...
         if uploaded_file is not None:
             try:
                 new_data = pd.read_csv(uploaded_file, sep=';') if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
@@ -542,7 +555,7 @@ def main_app():
                     new_data = new_data.astype(str)
                     if st.button("Tambahkan data ke Google Sheet"):
                         try:
-                            scopes = ['https://www.googleapis.com/auth/spreadsheets']
+                            scopes = ['https.www.googleapis.com/auth/spreadsheets']
                             creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
                             creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
                             client = gspread.authorize(creds)
@@ -566,11 +579,11 @@ def main_app():
                 <div style="font-size: 0.7rem; margin-top: 4px;">Instagram P4 JUKS</div>
             </a>
             <a href="https://www.tiktok.com/@p4.juks?_t=ZS-8zKsAgWjXJQ&_r=1" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
-                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
+                <img src="httpsentry_point-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.get src="https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">TikTok P4 JUKS</div>
             </a>
-            <a href="https://youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
-                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
+            <a href="https.youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+                <img src="https.raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">YouTube P4 JUKS</div>
             </a>
         </div>
