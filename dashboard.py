@@ -451,11 +451,17 @@ def main_app():
     st.write("Pilih sekolah untuk melihat daftar nama di Dapodik yang belum terdata mengikuti pelatihan.")
 
     try:
-        # Ambil daftar sekolah unik dari data pelatihan
-        school_list_df = df[['ASAL_SEKOLAH', 'NPSN']].drop_duplicates().dropna(subset=['NPSN'])
-        # Gabungkan dengan data sekolah untuk mendapatkan Status dan Kecamatan
+        # 1. Ambil SEMUA entri sekolah/npsn dari data pelatihan
+        school_list_df = df[['NPSN', 'ASAL_SEKOLAH']].dropna(subset=['NPSN'])
+        
+        # 2. PERBAIKAN: Drop duplicates HANYA berdasarkan NPSN.
+        # Ini akan mengambil nama sekolah pertama yang terkait dgn NPSN itu dan mengabaikan sisanya.
+        school_list_df = school_list_df.drop_duplicates(subset=['NPSN'], keep='first')
+        
+        # 3. Gabungkan dengan data sekolah untuk mendapatkan Status dan Kecamatan
         school_list_df = school_list_df.merge(df_sekolah_sumber[['NPSN', 'STATUS', 'KECAMATAN']], on='NPSN', how='left')
-        # Hapus sekolah yang tidak memiliki data Status atau Kecamatan
+        
+        # 4. Hapus sekolah yang tidak memiliki data Status atau Kecamatan
         school_list_df = school_list_df.dropna(subset=['STATUS', 'KECAMATAN']) 
     except Exception as e:
         st.error(f"Gagal memproses daftar sekolah untuk filter: {e}")
@@ -585,3 +591,4 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
