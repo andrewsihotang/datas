@@ -130,7 +130,7 @@ def main_app():
                 "pelatihan_filter": [], "status_sekolah_filter": [], "date_range": [],
                 "summary_status_filter": [], "summary_kabupaten_filter": [],
                 "reco_status_filter": [], "reco_kec_filter": [], "reco_school_select": "-- Pilih Sekolah --",
-                "rekap_pelatihan_filter": "Keseluruhan" # Tambahkan reset untuk filter rekap baru
+                "rekap_pelatihan_filter": "Pendidik" # Diubah dari "Keseluruhan"
             }
             reset_filters(filter_defaults)
             st.rerun()
@@ -206,7 +206,6 @@ def main_app():
 
     # --- TAB 1: DATA PESERTA PELATIHAN ---
     with tab_data_peserta:
-        # Tentukan pilihan tunggal dari multiselect HANYA untuk judul tab ini
         pelatihan_choice_tab1 = st.session_state.get("pelatihan_filter", [None])[0] if len(st.session_state.get("pelatihan_filter", [])) == 1 else None
         title_map = {'Tendik': 'Data Peserta Pelatihan Tenaga Kependidikan', 'Pendidik': 'Data Peserta Pelatihan Pendidik', 'Kejuruan': 'Data Peserta Pelatihan Kejuruan'}
         main_title = title_map.get(pelatihan_choice_tab1, 'Data Peserta Pelatihan Tenaga Kependidikan')
@@ -343,11 +342,11 @@ def main_app():
         st.subheader("Filter untuk Rekap Pencapaian")
 
         # ==================================================================
-        # === FILTER PELATIHAN BARU UNTUK TAB REKAP ===
+        # === FILTER PELATIHAN BARU UNTUK TAB REKAP (TANPA KESELURUHAN) ===
         # ==================================================================
         rekap_pelatihan_choice = st.selectbox(
             "Pilih Kategori Pelatihan untuk Rekap",
-            options=["Keseluruhan", "Pendidik", "Tendik", "Kejuruan"],
+            options=["Pendidik", "Tendik", "Kejuruan"], # "Keseluruhan" dihapus
             key="rekap_pelatihan_filter"
         )
         # ==================================================================
@@ -390,26 +389,21 @@ def main_app():
         # ==================================================================
         # === LOGIKA REKAP DIPERBARUI ===
         # ==================================================================
-        # Gunakan filter rekap_pelatihan_choice dari tab ini
         jenjang_targets, sekolah_targets = get_dynamic_targets(filtered_school_data, rekap_pelatihan_choice)
         npsn_to_show = filtered_school_data['NPSN'].astype(str).unique()
         
-        # Buat dataframe baru untuk rekap, dimulai dari data lengkap
         summary_df = df.copy() 
-        # Terapkan filter pelatihan dari selectbox tab ini
-        if rekap_pelatihan_choice != "Keseluruhan":
-            summary_df = summary_df[summary_df['PELATIHAN'] == rekap_pelatihan_choice]
+        
+        # Filter pelatihan SELALU diterapkan
+        summary_df = summary_df[summary_df['PELATIHAN'] == rekap_pelatihan_choice]
 
-        # Terapkan filter Status/Kabupaten (jika ada)
         if summary_status_filter or summary_kabupaten_filter:
             summary_df = summary_df[summary_df['NPSN'].astype(str).isin(npsn_to_show)]
 
-        # Gunakan rekap_pelatihan_choice untuk prefix
         prefix = rekap_pelatihan_choice
         
         all_jenjang_from_source = sorted(df_sekolah_sumber['TIPE'].dropna().unique())
         
-        # Gunakan rekap_pelatihan_choice untuk logika SLB
         if rekap_pelatihan_choice == 'Pendidik':
             all_jenjang = all_jenjang_from_source
         else:
@@ -492,13 +486,10 @@ def main_app():
         if kec_reco_filter:
             filtered_schools_for_reco = filtered_schools_for_reco[filtered_schools_for_reco['KECAMATAN'].isin(kec_reco_filter)]
         
-        # JIKA FILTER KECAMATAN KOSONG, TAMPILKAN SEMUA SEKOLAH (SESUAI FILTER STATUS)
-        # JIKA FILTER KECAMATAN DIISI, MAKA TAMPILKAN SEKOLAH YANG SESUAI
-        # INI MENCEGAH DAFTAR SEKOLAH KOSONG JIKA KECAMATAN BELUM DIPILIH
         display_schools_df = filtered_schools_for_reco
-        if not kec_reco_filter: # Jika filter kecamatan kosong
+        if not kec_reco_filter: 
             temp_df_status_only = school_list_df.copy()
-            if status_reco_filter: # Terapkan filter status jika ada
+            if status_reco_filter: 
                  temp_df_status_only = temp_df_status_only[temp_df_status_only['STATUS'].isin(status_reco_filter)]
             display_schools_df = temp_df_status_only
 
@@ -555,7 +546,7 @@ def main_app():
                     new_data = new_data.astype(str)
                     if st.button("Tambahkan data ke Google Sheet"):
                         try:
-                            scopes = ['https.www.googleapis.com/auth/spreadsheets']
+                            scopes = ['https://www.googleapis.com/auth/spreadsheets']
                             creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
                             creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
                             client = gspread.authorize(creds)
@@ -579,11 +570,11 @@ def main_app():
                 <div style="font-size: 0.7rem; margin-top: 4px;">Instagram P4 JUKS</div>
             </a>
             <a href="https://www.tiktok.com/@p4.juks?_t=ZS-8zKsAgWjXJQ&_r=1" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
-                <img src="httpsentry_point-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.get src="https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
+                <img src="httpsentry_point-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.GET https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">TikTok P4 JUKS</div>
             </a>
-            <a href="https.youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
-                <img src="https.raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
+            <a href="https://youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+                <img src="httpshttps://raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">YouTube P4 JUKS</div>
             </a>
         </div>
