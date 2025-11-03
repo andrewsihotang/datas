@@ -125,7 +125,8 @@ def main_app():
             filter_defaults = {
                 "jenjang_filter": [], "kecamatan_filter": [], "nama_pelatihan_filter": [],
                 "pelatihan_filter": [], "status_sekolah_filter": [], "date_range": [],
-                "summary_status_filter": [], "summary_kabupaten_filter": []
+                "summary_status_filter": [], "summary_kabupaten_filter": [],
+                "reco_status_filter": [], "reco_kab_filter": [], "reco_school_select": "-- Pilih Sekolah --" # Tambahkan reset untuk filter baru
             }
             reset_filters(filter_defaults)
             st.rerun()
@@ -147,7 +148,32 @@ def main_app():
         df_sekolah.columns = [col.strip().upper() for col in df_sekolah.columns]
         df_sekolah['TIPE'].replace('', pd.NA, inplace=True)
         df_sekolah.dropna(subset=['TIPE'], inplace=True)
+        # Pastikan NPSN adalah string untuk merge
+        if 'NPSN' in df_sekolah.columns:
+            df_sekolah['NPSN'] = df_sekolah['NPSN'].astype(str)
         return df_sekolah
+
+    # ==================================================================
+    # === FUNGSI BARU UNTUK MEMUAT DATA DAPODIK ===
+    # ==================================================================
+    @st.cache_data
+    def load_dapodik_data(json_keyfile_str, spreadsheet_id):
+        df_dapodik = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, 'data_dapodik_name')
+        df_dapodik.columns = [col.strip().upper() for col in df_dapodik.columns]
+        
+        # --- PERHATIKAN: Sesuaikan nama kolom di bawah ini ---
+        # Asumsi nama kolom adalah 'NPSN' dan 'NAMA_LENGKAP'
+        NAMA_KOLOM_NAMA = 'NAMA_LENGKAP' 
+        
+        if 'NPSN' not in df_dapodik.columns or NAMA_KOLOM_NAMA not in df_dapodik.columns:
+            st.error(f"Sheet 'data_dapodik_name' harus memiliki kolom 'NPSN' dan '{NAMA_KOLOM_NAMA}'")
+            return pd.DataFrame()
+            
+        df_dapodik['NPSN'] = df_dapodik['NPSN'].astype(str)
+        df_dapodik[NAMA_KOLOM_NAMA] = df_dapodik[NAMA_KOLOM_NAMA].astype(str).str.strip()
+        df_dapodik = df_dapodik.dropna(subset=['NPSN', NAMA_KOLOM_NAMA])
+        return df_dapodik
+    # ==================================================================
 
     # --- Load Data ---
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
@@ -168,8 +194,11 @@ def main_app():
         df['NPSN'] = df['NPSN'].astype(str)
     if 'STATUS_SEKOLAH' not in df.columns:
         df['STATUS_SEKOLAH'] = pd.NA
-    # TAMBAHKAN BARIS INI
     df['JENJANG'] = df['JENJANG'].replace('DIKMAS', 'PKBM')
+    # Bersihkan nama peserta di data pelatihan (PENTING untuk perbandingan)
+    if 'NAMA_PESERTA' in df.columns:
+        df['NAMA_PESERTA'] = df['NAMA_PESERTA'].astype(str).str.strip()
+
 
     pelatihan_choice = st.session_state.get("pelatihan_filter", [None])[0] if len(st.session_state.get("pelatihan_filter", [])) == 1 else None
     title_map = {'Tendik': 'Data Peserta Pelatihan Tenaga Kependidikan', 'Pendidik': 'Data Peserta Pelatihan Pendidik', 'Kejuruan': 'Data Peserta Pelatihan Kejuruan'}
@@ -219,31 +248,19 @@ def main_app():
     st.write(f'Showing {len(search_results_df)} records')
     view_mode = st.radio("Display mode:", ['Card View', 'Table View'], horizontal=True, label_visibility="collapsed")
 
-    # Initialize session state for pagination if it doesn't exist
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = 1
-
-    # Reset page to 1 if filters or search terms change the number of records
-    if 'last_record_count' not in st.session_state:
-        st.session_state.last_record_count = len(search_results_df)
-    if st.session_state.last_record_count != len(search_results_df):
-        st.session_state.current_page = 1
-        st.session_state.last_record_count = len(search_results_df)
-
+    # ... (Sisa kode Card View dan Table View tetap sama) ...
+    
     # --- CARD VIEW IMPLEMENTATION with Custom Pagination ---
     if view_mode == 'Card View':
         page_size = 8
         total_pages = (len(search_results_df) // page_size) + (1 if len(search_results_df) % page_size > 0 else 0)
         total_pages = max(1, total_pages) # Ensure at least 1 page
 
-        # Ensure current page is valid
         st.session_state.current_page = min(st.session_state.current_page, total_pages)
-
         start_index = (st.session_state.current_page - 1) * page_size
         end_index = start_index + page_size
         paginated_df = search_results_df.iloc[start_index:end_index]
 
-        # Display the cards in a grid
         num_columns = 4
         cols = st.columns(num_columns)
         for index, row in paginated_df.reset_index().iterrows():
@@ -264,7 +281,6 @@ def main_app():
         
         st.markdown("---")
         
-        # --- NEW: Custom Pagination Logic ---
         if total_pages > 1:
             prev_col, page_info_col, next_col = st.columns([1, 8, 1])
             with prev_col:
@@ -302,26 +318,23 @@ def main_app():
         if selected is not None and not selected.empty:
             st.session_state.selected_participant_details = selected.iloc[0].to_dict()
 
+
     # --- DETAIL VIEW LOGIC (Used by both Card and Table views) ---
     if 'selected_participant_details' in st.session_state and st.session_state.selected_participant_details:
         with st.container(border=True):
             selected_row = st.session_state.selected_participant_details
             
-            # --- PERBAIKAN DIMULAI DI SINI ---
-            # 1. Dapatkan nama dan NPSN yang bersih dari baris yang dipilih
-            selected_name = str(selected_row.get('NAMA_PESERTA', 'N/A')).strip() # .strip() untuk hapus spasi
+            selected_name = str(selected_row.get('NAMA_PESERTA', 'N/A')).strip() 
             selected_npsn = str(selected_row.get('NPSN', 'N/A'))
-            selected_school = selected_row.get('ASAL_SEKOLAH', 'N/A') # Tetap ambil nama sekolah untuk judul
+            selected_school = selected_row.get('ASAL_SEKOLAH', 'N/A') 
 
             st.markdown("### Detail Peserta")
             st.write(f"Semua pelatihan yang diikuti oleh: **{selected_name}** dari **{selected_school}**")
 
-            # 2. Cari di dataframe utama (df) berdasarkan NAMA (yang sudah bersih) dan NPSN (lebih andal)
             participant_trainings = df[
-                (df['NAMA_PESERTA'].astype(str).str.strip() == selected_name) &  # Bersihkan nama di df sebelum membandingkan
-                (df['NPSN'].astype(str) == selected_npsn) # Cocokkan dengan NPSN
+                (df['NAMA_PESERTA'].astype(str).str.strip() == selected_name) &  
+                (df['NPSN'].astype(str) == selected_npsn) 
             ][['NAMA_PELATIHAN', 'TANGGAL', 'ASAL_SEKOLAH', 'NPSN']].drop_duplicates().reset_index(drop=True)
-            # --- PERBAIKAN SELESAI ---
             
             participant_trainings['TANGGAL'] = pd.to_datetime(participant_trainings['TANGGAL']).dt.strftime('%Y-%m-%d')
             participant_trainings.index += 1
@@ -332,7 +345,7 @@ def main_app():
                 del st.session_state.selected_participant_details
                 st.rerun()
 
-    # --- DYNAMIC SUMMARY SECTION (Unchanged) ---
+    # --- DYNAMIC SUMMARY SECTION ---
     st.markdown('---')
     st.subheader("Filter untuk Rekap Pencapaian")
     summary_col1, summary_col2 = st.columns(2)
@@ -355,40 +368,25 @@ def main_app():
     if summary_kabupaten_filter:
         filtered_school_data = filtered_school_data[filtered_school_data['KABUPATEN'].isin(summary_kabupaten_filter)]
 
-    # ==================================================================
-    # === PERUBAHAN 1: Modifikasi Fungsi get_dynamic_targets ===
-    # ==================================================================
     def get_dynamic_targets(filtered_df_sekolah, pelatihan_filter_choice):
-        df_sekolah = filtered_df_sekolah.copy() # Mulai dengan semua data
+        df_sekolah = filtered_df_sekolah.copy() 
         
-        # --- LOGIKA BARU UNTUK SLB ---
-        # HANYA filter SLB jika filter BUKAN Pendidik
         if pelatihan_filter_choice != 'Pendidik':
             df_sekolah = df_sekolah[df_sekolah['TIPE'] != 'SLB'].copy()
-        # Jika 'Pendidik', biarkan SLB tetap ada di dataframe
         
-        # Konversi semua kolom target potensial ke numerik
         df_sekolah['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
         df_sekolah['TENAGA_KEPENDIDIKAN'] = pd.to_numeric(df_sekolah['TENAGA_KEPENDIDIKAN'], errors='coerce').fillna(0).astype(int)
         df_sekolah['GURU'] = pd.to_numeric(df_sekolah['GURU'], errors='coerce').fillna(0).astype(int)
 
-        # --- LOGIKA BARU BERDASARKAN PILIHAN FILTER ---
         if pelatihan_filter_choice == 'Pendidik':
             df_sekolah['TARGET_PESERTA'] = df_sekolah['GURU']
-            # Ini sekarang akan secara otomatis menghitung target 'SLB' menggunakan kolom 'GURU'
         else: 
-            # Default untuk Tendik, Kejuruan, dan Keseluruhan (None)
             df_sekolah['TARGET_PESERTA'] = df_sekolah['KEPALA_SEKOLAH'] + df_sekolah['TENAGA_KEPENDIDIKAN']
-            # Ini aman karena 'SLB' sudah difilter di atas untuk kasus 'else'
-        # --- AKHIR LOGIKA BARU ---
 
         jenjang_targets = df_sekolah.groupby('TIPE')['TARGET_PESERTA'].sum().to_dict()
         sekolah_targets = df_sekolah.groupby('TIPE').size().to_dict()
         return jenjang_targets, sekolah_targets
 
-    # ==================================================================
-    # === PERUBAHAN 2: Modifikasi Cara Pemanggilan Fungsi ===
-    # ==================================================================
     jenjang_targets, sekolah_targets = get_dynamic_targets(filtered_school_data, pelatihan_choice)
     npsn_to_show = filtered_school_data['NPSN'].astype(str).unique()
     
@@ -398,17 +396,12 @@ def main_app():
 
     prefix = pelatihan_choice if pelatihan_choice else "Keseluruhan"
     
-    # ==================================================================
-    # === PERUBAHAN 3: Logika Dinamis untuk all_jenjang ===
-    # ==================================================================
     all_jenjang_from_source = sorted(df_sekolah_sumber['TIPE'].dropna().unique())
     
     if pelatihan_choice == 'Pendidik':
-        all_jenjang = all_jenjang_from_source # Daftar ini akan menyertakan SLB
+        all_jenjang = all_jenjang_from_source
     else:
-        all_jenjang = [j for j in all_jenjang_from_source if j != 'SLB'] # Daftar ini membuang SLB
-    # ==================================================================
-
+        all_jenjang = [j for j in all_jenjang_from_source if j != 'SLB']
 
     summary_rows = []
     for jenjang in all_jenjang:
@@ -443,6 +436,92 @@ def main_app():
     df_summary_sekolah.index += 1
     st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
     st.dataframe(df_summary_sekolah, use_container_width=True)
+    
+
+    # ==================================================================
+    # === BAGIAN REKOMENDASI BARU ===
+    # ==================================================================
+    st.markdown('---')
+    st.subheader("💡 Rekomendasi Peserta (Berdasarkan Data Dapodik)")
+    st.write("Pilih sekolah untuk melihat daftar nama di Dapodik yang belum terdata mengikuti pelatihan.")
+
+    # Siapkan daftar sekolah untuk filter
+    # Kita ambil dari data pelatihan 'df' yang digabung dengan info 'df_sekolah_sumber'
+    try:
+        school_list_df = df[['ASAL_SEKOLAH', 'NPSN']].drop_duplicates().dropna(subset=['NPSN'])
+        school_list_df = school_list_df.merge(df_sekolah_sumber[['NPSN', 'STATUS', 'KABUPATEN']], on='NPSN', how='left')
+        school_list_df = school_list_df.dropna(subset=['STATUS', 'KABUPATEN']) # Hapus yg tidak ada data status/kabupaten
+    except Exception as e:
+        st.error(f"Gagal memproses daftar sekolah untuk filter: {e}")
+        school_list_df = pd.DataFrame(columns=['ASAL_SEKOLAH', 'NPSN', 'STATUS', 'KABUPATEN'])
+
+    reco_col1, reco_col2 = st.columns(2)
+    with reco_col1:
+        status_reco_filter = st.multiselect(
+            "Filter Status Sekolah",
+            options=school_list_df['STATUS'].unique(),
+            key="reco_status_filter"
+        )
+    with reco_col2:
+        kab_reco_filter = st.multiselect(
+            "Filter Kabupaten/Kota",
+            options=school_list_df['KABUPATEN'].unique(),
+            key="reco_kab_filter"
+        )
+
+    # Terapkan filter ke daftar sekolah
+    filtered_schools_for_reco = school_list_df.copy()
+    if status_reco_filter:
+        filtered_schools_for_reco = filtered_schools_for_reco[filtered_schools_for_reco['STATUS'].isin(status_reco_filter)]
+    if kab_reco_filter:
+        filtered_schools_for_reco = filtered_schools_for_reco[filtered_schools_for_reco['KABUPATEN'].isin(kab_reco_filter)]
+
+    school_name_list = ["-- Pilih Sekolah --"] + sorted(filtered_schools_for_reco['ASAL_SEKOLAH'].unique())
+    selected_school_name = st.selectbox(
+        "Pilih Sekolah",
+        school_name_list,
+        key="reco_school_select"
+    )
+
+    if selected_school_name != "-- Pilih Sekolah --":
+        try:
+            # 1. Dapatkan NPSN sekolah yang dipilih
+            selected_npsn = str(filtered_schools_for_reco[
+                filtered_schools_for_reco['ASAL_SEKOLAH'] == selected_school_name
+            ].iloc[0]['NPSN'])
+            
+            # 2. Muat data master dapodik
+            df_dapodik = load_dapodik_data(json_keyfile_str, spreadsheet_id)
+            
+            # Asumsi nama kolom di data_dapodik_name adalah 'NAMA_LENGKAP'
+            NAMA_KOLOM_NAMA_DAPODIK = 'NAMA_LENGKAP'
+
+            if not df_dapodik.empty:
+                # 3. Dapatkan daftar nama master dari sekolah ini
+                master_names = set(df_dapodik[df_dapodik['NPSN'] == selected_npsn][NAMA_KOLOM_NAMA_DAPODIK])
+                
+                # 4. Dapatkan daftar nama yang sudah dilatih dari sekolah ini
+                trained_names = set(df[df['NPSN'] == selected_npsn]['NAMA_PESERTA'])
+                
+                # 5. Cari perbedaannya
+                recommendation_list = sorted(list(master_names - trained_names))
+                
+                st.write(f"Ditemukan **{len(recommendation_list)}** orang di **{selected_school_name}** (NPSN: {selected_npsn}) yang belum terdata pelatihan:")
+                
+                if recommendation_list:
+                    reco_df = pd.DataFrame(recommendation_list, columns=["Nama (Rekomendasi)"])
+                    reco_df.index += 1
+                    st.dataframe(reco_df, use_container_width=True, height=300)
+                else:
+                    if not master_names:
+                        st.warning("Tidak ada data nama ditemukan di sheet 'data_dapodik_name' untuk sekolah ini.")
+                    else:
+                        st.success("Semua nama di data Dapodik sekolah ini sudah terdata mengikuti pelatihan.")
+            
+        except Exception as e:
+            st.error(f"Gagal memproses data rekomendasi. Pastikan sheet 'data_dapodik_name' ada dan memiliki kolom 'NPSN' dan 'NAMA_LENGKAP'. Error: {e}")
+    # ==================================================================
+    
     
     st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
     
