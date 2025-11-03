@@ -325,36 +325,37 @@ def main_app():
     #         if st.button("Tutup Detail"):
     #             del st.session_state.selected_participant_details
     #             st.rerun()
-    # --- DETAIL VIEW LOGIC (Used by both Card and Table views) ---
-    if 'selected_participant_details' in st.session_state and st.session_state.selected_participant_details:
-        with st.container(border=True):
-            selected_row = st.session_state.selected_participant_details
-            
-            # --- PERBAIKAN DIMULAI DI SINI ---
-            # 1. Dapatkan nama dan NPSN yang bersih dari baris yang dipilih
-            selected_name = str(selected_row.get('NAMA_PESERTA', 'N/A')).strip() # .strip() untuk hapus spasi
-            selected_npsn = str(selected_row.get('NPSN', 'N/A'))
-            selected_school = selected_row.get('ASAL_SEKOLAH', 'N/A') # Tetap ambil nama sekolah untuk judul
 
-            st.markdown("### Detail Peserta")
-            st.write(f"Semua pelatihan yang diikuti oleh: **{selected_name}** dari **{selected_school}**")
+   # --- DETAIL VIEW LOGIC (Used by both Card and Table views) ---
+    if 'selected_participant_details' in st.session_state and st.session_state.selected_participant_details:
+        with st.container(border=True):
+            selected_row = st.session_state.selected_participant_details
+            
+            # --- PERBAIKAN DIMULAI DI SINI ---
+            # 1. Dapatkan nama dan NPSN yang bersih dari baris yang dipilih
+            selected_name = str(selected_row.get('NAMA_PESERTA', 'N/A')).strip() # .strip() untuk hapus spasi
+            selected_npsn = str(selected_row.get('NPSN', 'N/A'))
+            selected_school = selected_row.get('ASAL_SEKOLAH', 'N/A') # Tetap ambil nama sekolah untuk judul
 
-            # 2. Cari di dataframe utama (df) berdasarkan NAMA (yang sudah bersih) dan NPSN (lebih andal)
-            participant_trainings = df[
-                (df['NAMA_PESERTA'].astype(str).str.strip() == selected_name) &  # Bersihkan nama di df sebelum membandingkan
-                (df['NPSN'].astype(str) == selected_npsn) # Cocokkan dengan NPSN
-            ][['NAMA_PELATIHAN', 'TANGGAL', 'ASAL_SEKOLAH', 'NPSN']].drop_duplicates().reset_index(drop=True)
-            # --- PERBAIKAN SELESAI ---
-            
-            participant_trainings['TANGGAL'] = pd.to_datetime(participant_trainings['TANGGAL']).dt.strftime('%Y-%m-%d')
-            participant_trainings.index += 1
-            st.dataframe(participant_trainings, use_container_width=True)
-            st.write(f"Jumlah pelatihan: {len(participant_trainings)}")
-            
-            if st.button("Tutup Detail"):
-                del st.session_state.selected_participant_details
-                st.rerun()
+            st.markdown("### Detail Peserta")
+            st.write(f"Semua pelatihan yang diikuti oleh: **{selected_name}** dari **{selected_school}**")
 
+            # 2. Cari di dataframe utama (df) berdasarkan NAMA (yang sudah bersih) dan NPSN (lebih andal)
+            participant_trainings = df[
+                (df['NAMA_PESERTA'].astype(str).str.strip() == selected_name) &  # Bersihkan nama di df sebelum membandingkan
+                (df['NPSN'].astype(str) == selected_npsn) # Cocokkan dengan NPSN
+            ][['NAMA_PELATIHAN', 'TANGGAL', 'ASAL_SEKOLAH', 'NPSN']].drop_duplicates().reset_index(drop=True)
+            # --- PERBAIKAN SELESAI ---
+            
+            participant_trainings['TANGGAL'] = pd.to_datetime(participant_trainings['TANGGAL']).dt.strftime('%Y-%m-%d')
+            participant_trainings.index += 1
+            st.dataframe(participant_trainings, use_container_width=True)
+            st.write(f"Jumlah pelatihan: {len(participant_trainings)}")
+            
+            if st.button("Tutup Detail"):
+                del st.session_state.selected_participant_details
+                st.rerun()
+                
     # --- DYNAMIC SUMMARY SECTION (Unchanged) ---
     st.markdown('---')
     st.subheader("Filter untuk Rekap Pencapaian")
@@ -492,5 +493,6 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
 
 
