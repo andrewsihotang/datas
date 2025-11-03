@@ -117,7 +117,6 @@ def reset_filters(options_dict):
         st.session_state[key] = default
 
 def main_app():
-    # --- BAGIAN UMUM (DI LUAR TAB) ---
     st.markdown("<br>", unsafe_allow_html=True)
     colbtn1, colbtn2, _ = st.columns([1, 1, 8])
     with colbtn1:
@@ -135,7 +134,6 @@ def main_app():
             reset_filters(filter_defaults)
             st.rerun()
 
-    # --- FUNGSI LOAD DATA (TETAP DI SINI) ---
     @st.cache_data
     def load_data_from_gsheets(json_keyfile_str, spreadsheet_id, sheet_name):
         scopes = ['https://www.googleapis.com/auth/spreadsheets.readonly']
@@ -147,6 +145,9 @@ def main_app():
         df = pd.DataFrame(data)
         return df
 
+    # ==================================================================
+    # === PERUBAHAN PADA load_school_data ===
+    # ==================================================================
     @st.cache_data
     def load_school_data(json_keyfile_str, spreadsheet_id):
         df_sekolah = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, 'data_sekolah')
@@ -157,7 +158,11 @@ def main_app():
             df_sekolah['NPSN'] = df_sekolah['NPSN'].astype(str)
         if 'KECAMATAN' in df_sekolah.columns:
             df_sekolah['KECAMATAN'] = df_sekolah['KECAMATAN'].astype(str)
+        # Pastikan KABUPATEN juga string untuk perbandingan
+        if 'KABUPATEN' in df_sekolah.columns:
+            df_sekolah['KABUPATEN'] = df_sekolah['KABUPATEN'].astype(str)
         return df_sekolah
+    # ==================================================================
 
     @st.cache_data
     def load_dapodik_data(json_keyfile_str, spreadsheet_id):
@@ -172,7 +177,7 @@ def main_app():
         df_dapodik = df_dapodik.dropna(subset=['NPSN', NAMA_KOLOM_NAMA])
         return df_dapodik
 
-    # --- LOAD DAN CLEAN DATA (TETAP DI SINI) ---
+    # --- Load Data ---
     json_keyfile_str = st.secrets["GSHEET_SERVICE_ACCOUNT"]
     spreadsheet_id = '1_YeSK2zgoExnC8n6tlmoJFQDVEWZbncdBLx8S5k-ljc'
     sheet_names = ['Tendik', 'Pendidik', 'Kejuruan']
@@ -181,6 +186,7 @@ def main_app():
     df_sekolah_sumber = load_school_data(json_keyfile_str, spreadsheet_id)
     df_sekolah_sumber['TIPE'] = df_sekolah_sumber['TIPE'].replace('DIKMAS', 'PKBM')
 
+    # --- Data Cleaning ---
     df.columns = [col.strip().upper() for col in df.columns]
     if 'STASUS_SEKOLAH' in df.columns:
         df.rename(columns={'STASUS_SEKOLAH': 'STATUS_SEKOLAH'}, inplace=True)
@@ -194,12 +200,9 @@ def main_app():
     if 'NAMA_PESERTA' in df.columns:
         df['NAMA_PESERTA'] = df['NAMA_PESERTA'].astype(str).str.strip()
 
-    # Variabel pelatihan_choice diperlukan untuk beberapa tab
     pelatihan_choice = st.session_state.get("pelatihan_filter", [None])[0] if len(st.session_state.get("pelatihan_filter", [])) == 1 else None
 
-    # ==================================================================
-    # === PEMBUATAN TAB ===
-    # ==================================================================
+    # --- PEMBUATAN TAB ---
     tab_data_peserta, tab_rekap, tab_rekomendasi, tab_upload = st.tabs([
         "📊 Data Peserta Pelatihan", 
         "📈 Rekap Pencapaian", 
@@ -213,6 +216,7 @@ def main_app():
         main_title = title_map.get(pelatihan_choice, 'Data Peserta Pelatihan Tenaga Kependidikan')
         st.title(main_title)
 
+        # ... (Kode untuk filter, search, card view, table view, detail view tetap SAMA) ...
         # --- Filters ---
         with st.container():
             col1, col2, col3 = st.columns(3)
@@ -319,7 +323,6 @@ def main_app():
             if selected is not None and not selected.empty:
                 st.session_state.selected_participant_details = selected.iloc[0].to_dict()
 
-        # --- DETAIL VIEW LOGIC (Used by both Card and Table views) ---
         if 'selected_participant_details' in st.session_state and st.session_state.selected_participant_details:
             with st.container(border=True):
                 selected_row = st.session_state.selected_participant_details
@@ -357,6 +360,7 @@ def main_app():
                 key="summary_kabupaten_filter"
             )
 
+        # ... (Sisa kode untuk rekap pencapaian tetap SAMA) ...
         filtered_school_data = df_sekolah_sumber.copy()
         if summary_status_filter:
             filtered_school_data = filtered_school_data[filtered_school_data['STATUS'].isin(summary_status_filter)]
@@ -381,7 +385,7 @@ def main_app():
         jenjang_targets, sekolah_targets = get_dynamic_targets(filtered_school_data, pelatihan_choice)
         npsn_to_show = filtered_school_data['NPSN'].astype(str).unique()
         
-        summary_df = filtered_df.copy() # Gunakan filtered_df dari Tab 1
+        summary_df = filtered_df.copy()
         if summary_status_filter or summary_kabupaten_filter:
             summary_df = summary_df[summary_df['NPSN'].astype(str).isin(npsn_to_show)]
 
@@ -436,14 +440,21 @@ def main_app():
         try:
             school_list_df = df[['NPSN', 'ASAL_SEKOLAH']].dropna(subset=['NPSN'])
             school_list_df = school_list_df.drop_duplicates(subset=['NPSN'], keep='first')
-            school_list_df = school_list_df.merge(df_sekolah_sumber[['NPSN', 'STATUS', 'KECAMATAN']], on='NPSN', how='left')
-            school_list_df = school_list_df.dropna(subset=['STATUS', 'KECAMATAN']) 
-            # Perbaikan: Bersihkan prefiks 'KEC.' secara paksa
+            
+            # ==================================================================
+            # === PERUBAHAN PADA TAB REKOMENDASI (MERGE) ===
+            # ==================================================================
+            # 1. Merge untuk mendapatkan KABUPATEN
+            school_list_df = school_list_df.merge(df_sekolah_sumber[['NPSN', 'STATUS', 'KECAMATAN', 'KABUPATEN']], on='NPSN', how='left')
+            # 2. Hapus data yang tidak lengkap (termasuk KABUPATEN)
+            school_list_df = school_list_df.dropna(subset=['STATUS', 'KECAMATAN', 'KABUPATEN']) 
+            # ==================================================================
+
             if 'KECAMATAN' in school_list_df.columns:
                 school_list_df['KECAMATAN'] = school_list_df['KECAMATAN'].astype(str).str.replace("KEC. ", "").str.strip()
         except Exception as e:
             st.error(f"Gagal memproses daftar sekolah untuk filter: {e}")
-            school_list_df = pd.DataFrame(columns=['ASAL_SEKOLAH', 'NPSN', 'STATUS', 'KECAMATAN'])
+            school_list_df = pd.DataFrame(columns=['ASAL_SEKOLAH', 'NPSN', 'STATUS', 'KECAMATAN', 'KABUPATEN'])
 
         reco_col1, reco_col2 = st.columns(2)
         with reco_col1:
@@ -453,11 +464,23 @@ def main_app():
                 key="reco_status_filter"
             )
         with reco_col2:
+            # ==================================================================
+            # === PERUBAHAN PADA TAB REKOMENDASI (FILTER OPSI) ===
+            # ==================================================================
+            # 3. Tentukan daftar kabupaten target
+            target_kabupaten = ['KOTA ADM. JAKARTA UTARA', 'KAB. ADM. KEP. SERIBU']
+            
+            # 4. Buat daftar opsi kecamatan HANYA dari kabupaten target
+            kecamatan_options = school_list_df[
+                school_list_df['KABUPATEN'].isin(target_kabupaten)
+            ]['KECAMATAN'].unique()
+
             kec_reco_filter = st.multiselect(
                 "Filter Kecamatan",
-                options=school_list_df['KECAMATAN'].unique(),
+                options=sorted(kecamatan_options), # Tampilkan daftar yang sudah difilter
                 key="reco_kec_filter"
             )
+            # ==================================================================
 
         filtered_schools_for_reco = school_list_df.copy()
         if status_reco_filter:
@@ -506,6 +529,7 @@ def main_app():
         upload_category = st.selectbox("Pilih kategori pelatihan untuk ditambahkan data", sheet_names)
         uploaded_file = st.file_uploader(f"Upload file CSV atau Excel untuk pelatihan '{upload_category}' (format sesuai template)", type=['csv', 'xlsx'])
         
+        # ... (Kode untuk upload data tetap SAMA) ...
         if uploaded_file is not None:
             try:
                 new_data = pd.read_csv(uploaded_file, sep=';') if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
