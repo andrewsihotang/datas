@@ -156,6 +156,7 @@ def main_app():
     dfs = [load_data_from_gsheets(json_keyfile_str, spreadsheet_id, name) for name in sheet_names]
     df = pd.concat(dfs, ignore_index=True)
     df_sekolah_sumber = load_school_data(json_keyfile_str, spreadsheet_id)
+    df_sekolah_sumber['TIPE'] = df_sekolah_sumber['TIPE'].replace('DIKMAS', 'PKBM')
 
     # --- Data Cleaning ---
     df.columns = [col.strip().upper() for col in df.columns]
@@ -167,6 +168,8 @@ def main_app():
         df['NPSN'] = df['NPSN'].astype(str)
     if 'STATUS_SEKOLAH' not in df.columns:
         df['STATUS_SEKOLAH'] = pd.NA
+    # TAMBAHKAN BARIS INI
+    df['JENJANG'] = df['JENJANG'].replace('DIKMAS', 'PKBM')
 
     pelatihan_choice = st.session_state.get("pelatihan_filter", [None])[0] if len(st.session_state.get("pelatihan_filter", [])) == 1 else None
     title_map = {'Tendik': 'Data Peserta Pelatihan Tenaga Kependidikan', 'Pendidik': 'Data Peserta Pelatihan Pendidik', 'Kejuruan': 'Data Peserta Pelatihan Kejuruan'}
@@ -460,3 +463,4 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
