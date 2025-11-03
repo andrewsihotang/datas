@@ -130,7 +130,7 @@ def main_app():
                 "pelatihan_filter": [], "status_sekolah_filter": [], "date_range": [],
                 "summary_status_filter": [], "summary_kabupaten_filter": [],
                 "reco_status_filter": [], "reco_kec_filter": [], "reco_school_select": "-- Pilih Sekolah --",
-                "rekap_pelatihan_filter": "Pendidik" # Diubah dari "Keseluruhan"
+                "rekap_pelatihan_filter": "Pendidik"
             }
             reset_filters(filter_defaults)
             st.rerun()
@@ -341,15 +341,11 @@ def main_app():
     with tab_rekap:
         st.subheader("Filter untuk Rekap Pencapaian")
 
-        # ==================================================================
-        # === FILTER PELATIHAN BARU UNTUK TAB REKAP (TANPA KESELURUHAN) ===
-        # ==================================================================
         rekap_pelatihan_choice = st.selectbox(
             "Pilih Kategori Pelatihan untuk Rekap",
-            options=["Pendidik", "Tendik", "Kejuruan"], # "Keseluruhan" dihapus
+            options=["Pendidik", "Tendik", "Kejuruan"],
             key="rekap_pelatihan_filter"
         )
-        # ==================================================================
 
         summary_col1, summary_col2 = st.columns(2)
         with summary_col1:
@@ -386,15 +382,10 @@ def main_app():
             sekolah_targets = df_sekolah.groupby('TIPE').size().to_dict()
             return jenjang_targets, sekolah_targets
 
-        # ==================================================================
-        # === LOGIKA REKAP DIPERBARUI ===
-        # ==================================================================
         jenjang_targets, sekolah_targets = get_dynamic_targets(filtered_school_data, rekap_pelatihan_choice)
         npsn_to_show = filtered_school_data['NPSN'].astype(str).unique()
         
         summary_df = df.copy() 
-        
-        # Filter pelatihan SELALU diterapkan
         summary_df = summary_df[summary_df['PELATIHAN'] == rekap_pelatihan_choice]
 
         if summary_status_filter or summary_kabupaten_filter:
@@ -408,14 +399,19 @@ def main_app():
             all_jenjang = all_jenjang_from_source
         else:
             all_jenjang = [j for j in all_jenjang_from_source if j != 'SLB']
-        # ==================================================================
 
         summary_rows = []
         for jenjang in all_jenjang:
             target = jenjang_targets.get(jenjang, 0)
             df_jenjang = summary_df[summary_df['JENJANG'] == jenjang]
             unique_count = df_jenjang.drop_duplicates(subset=['NAMA_PESERTA', 'ASAL_SEKOLAH']).shape[0]
-            percent = (unique_count / target * 100) if target > 0 else 0
+            
+            # ==================================================================
+            # === PERUBAHAN: Batasi Persentase di 100% ===
+            # ==================================================================
+            percent = min((unique_count / target * 100), 100) if target > 0 else 0
+            # ==================================================================
+            
             kurang = max(0, target - unique_count)
             summary_rows.append({
                 'Jenjang': jenjang, 'Target Jumlah Peserta Pelatihan': f"{target:,} Orang",
@@ -432,7 +428,13 @@ def main_app():
             target = sekolah_targets.get(jenjang, 0)
             df_sekolah = summary_df[summary_df['JENJANG'] == jenjang]
             unique_sekolah_count = df_sekolah['ASAL_SEKOLAH'].nunique()
-            percent = (unique_sekolah_count / target * 100) if target > 0 else 0
+            
+            # ==================================================================
+            # === PERUBAHAN: Batasi Persentase di 100% ===
+            # ==================================================================
+            percent = min((unique_sekolah_count / target * 100), 100) if target > 0 else 0
+            # ==================================================================
+
             kurang = max(0, target - unique_sekolah_count)
             sekolah_rows.append({
                 'Jenjang': jenjang, 'Target Jumlah Sekolah': f"{target:,} Sekolah",
@@ -570,11 +572,11 @@ def main_app():
                 <div style="font-size: 0.7rem; margin-top: 4px;">Instagram P4 JUKS</div>
             </a>
             <a href="https://www.tiktok.com/@p4.juks?_t=ZS-8zKsAgWjXJQ&_r=1" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
-                <img src="httpsentry_point-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.GET https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
+                <img src="httpsentry_point-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.1-1.1.1.Request: GET https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">TikTok P4 JUKS</div>
             </a>
             <a href="https://youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
-                <img src="httpshttps://raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
+                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">YouTube P4 JUKS</div>
             </a>
         </div>
