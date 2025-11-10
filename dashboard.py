@@ -461,10 +461,10 @@ def main_app():
         # === BAGIAN BARU: Unduh Laporan Lengkap ===
         # ==================================================================
         st.markdown("---")
-        st.subheader("Unduh Laporan Lengkap")
-        st.write("Unduh file Excel berisi *semua* peserta dari data Dapodik yang belum terdata pelatihan.")
+        st.subheader("Unduh Laporan")
+        st.write("Unduh file Excel berisi semua peserta yang belum terdata pelatihan.")
         
-        if st.button("Siapkan Laporan Lengkap (Semua Sekolah)"):
+        if st.button("Download Rekomendasi Peserta"):
             with st.spinner("Menggabungkan data... Ini mungkin perlu beberapa saat..."):
                 try:
                     # 1. Load data
@@ -690,3 +690,4 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
