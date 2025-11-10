@@ -495,26 +495,39 @@ def main_app():
                         untained_df = pd.DataFrame(list(untained_set), columns=['NPSN', 'Nama peserta'])
                         
                         # ==================================================================
-                        # === PERBAIKAN: Ambil 'ASAL_SEKOLAH' dari df (data peserta) ===
-                        # ==================================================================
-                        # 6. Add School Name
-                        # Buat peta NPSN -> ASAL_SEKOLAH dari data peserta (df)
-                        school_map_df = df[['NPSN', 'ASAL_SEKOLAH']].copy()
-                        school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.strip()
-                        school_map_df = school_map_df.dropna(subset=['NPSN', 'ASAL_SEKOLAH'])
-                        school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
-                        
-                        final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
-                        # ==================================================================
-                        
-                        # 7. Format
-                        # Pastikan kolom 'ASAL_SEKOLAH' ada, jika tidak (misal merge gagal), tambahkan sbg NaN
-                        if 'ASAL_SEKOLAH' not in final_df.columns:
-                            final_df['ASAL_SEKOLAH'] = pd.NA
-                            
-                        final_df = final_df[['ASAL_SEKOLAH', 'NPSN', 'Nama peserta']]
-                        final_df.rename(columns={'ASAL_SEKOLAH': 'Sekolah'}, inplace=True)
-                        final_df = final_df.sort_values(by=['Sekolah', 'Nama peserta']).reset_index(drop=True)
+                        # === PERBAIKAN: Ambil Nama Sekolah dari Master Data Sekolah (df_sekolah_sumber) ===
+                        # ==================================================================
+                        # 6. Add School Name
+                        # Buat peta NPSN -> NAMA_SEKOLAH dari data master (df_sekolah_sumber)
+                        # Pastikan sheet 'data_sekolah' Anda memiliki kolom 'NAMA_SEKOLAH' (atau sesuaikan namanya)
+                        
+                        # Ganti 'NAMA_SEKOLAH' jika nama kolomnya berbeda di sheet 'data_sekolah' Anda
+                        NAMA_KOLOM_SEKOLAH_MASTER = 'NAMA_SEKOLAH' 
+                        if NAMA_KOLOM_SEKOLAH_MASTER not in df_sekolah_sumber.columns:
+                            # Fallback jika kolom 'NAMA_SEKOLAH' tidak ada, coba 'ASAL_SEKOLAH'
+                            if 'ASAL_SEKOLAH' in df_sekolah_sumber.columns:
+                                NAMA_KOLOM_SEKOLAH_MASTER = 'ASAL_SEKOLAH'
+                            else:
+                                st.error("Kolom nama sekolah (NAMA_SEKOLAH atau ASAL_SEKOLAH) tidak ditemukan di sheet 'data_sekolah'.")
+                                # Buat kolom kosong agar tidak error
+                                NAMA_KOLOM_SEKOLAH_MASTER = 'NAMA_SEKOLAH' # set fiktif
+                                df_sekolah_sumber[NAMA_KOLOM_SEKOLAH_MASTER] = pd.NA
+
+                        school_map_df = df_sekolah_sumber[['NPSN', NAMA_KOLOM_SEKOLAH_MASTER]].copy()
+                        school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.strip()
+                        school_map_df = school_map_df.dropna(subset=['NPSN', NAMA_KOLOM_SEKOLAH_MASTER])
+                        school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
+                        
+          _                   final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
+                        # ==================================================================
+                        
+                        # 7. Format
+                        # Pastikan kolom (misal 'NAMA_SEKOLAH') ada
+                        if NAMA_KOLOM_SEKOLAH_MASTER not in final_df.columns:
+                            final_df[NAMA_KOLOM_SEKOLAH_MASTER] = pd.NA
+                        
+                        final_df = final_df[[NAMA_KOLOM_SEKOLAH_MASTER, 'NPSN', 'Nama peserta']]
+                        final_df.rename(columns={NAMA_KOLOM_SEKOLAH_MASTER: 'Sekolah'}, inplace=True)
                         
                         # 8. Create Excel in memory
                         output = io.BytesIO()
@@ -690,5 +703,6 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
 
 
