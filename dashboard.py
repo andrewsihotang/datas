@@ -455,7 +455,7 @@ def main_app():
     
     # --- TAB 3: REKOMENDASI PESERTA ---
     with tab_rekomendasi:
-        st.subheader("💡 Rekomendasi Peserta (Berdasarkan Data Dapodik)")
+        st.subheader("💡 Rekomendasi Peserta")
         
         # ==================================================================
         # === BAGIAN BARU: Unduh Laporan Lengkap ===
@@ -690,4 +690,5 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
 
