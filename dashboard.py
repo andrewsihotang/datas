@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 import json
-import io  # <-- DITAMBAHKAN: Diperlukan untuk download Excel
+import io  # Diperlukan untuk download Excel
 from google.oauth2.service_account import Credentials
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
@@ -469,7 +469,7 @@ def main_app():
                 try:
                     # 1. Load data
                     df_dapodik_all = load_dapodik_data(json_keyfile_str, spreadsheet_id)
-                    df_sekolah_all = load_school_data(json_keyfile_str, spreadsheet_id) # Sumber data sekolah
+                    # Data sekolah (df_sekolah_sumber) dan data peserta (df) sudah di-load
                     
                     if not df_dapodik_all.empty:
                         NAMA_KOLOM_NAMA_DAPODIK = 'NAMA_LENGKAP'
@@ -494,14 +494,24 @@ def main_app():
                         # 5. Convert back to DataFrame
                         untained_df = pd.DataFrame(list(untained_set), columns=['NPSN', 'Nama peserta'])
                         
+                        # ==================================================================
+                        # === PERBAIKAN: Ambil 'ASAL_SEKOLAH' dari df (data peserta) ===
+                        # ==================================================================
                         # 6. Add School Name
-                        school_map_df = df_sekolah_all[['NPSN', 'ASAL_SEKOLAH']].copy()
+                        # Buat peta NPSN -> ASAL_SEKOLAH dari data peserta (df)
+                        school_map_df = df[['NPSN', 'ASAL_SEKOLAH']].copy()
                         school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.strip()
-                        school_map_df = school_map_df.drop_duplicates(subset=['NPSN'])
+                        school_map_df = school_map_df.dropna(subset=['NPSN', 'ASAL_SEKOLAH'])
+                        school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
                         
                         final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
+                        # ==================================================================
                         
                         # 7. Format
+                        # Pastikan kolom 'ASAL_SEKOLAH' ada, jika tidak (misal merge gagal), tambahkan sbg NaN
+                        if 'ASAL_SEKOLAH' not in final_df.columns:
+                            final_df['ASAL_SEKOLAH'] = pd.NA
+                            
                         final_df = final_df[['ASAL_SEKOLAH', 'NPSN', 'Nama peserta']]
                         final_df.rename(columns={'ASAL_SEKOLAH': 'Sekolah'}, inplace=True)
                         final_df = final_df.sort_values(by=['Sekolah', 'Nama peserta']).reset_index(drop=True)
@@ -636,7 +646,7 @@ def main_app():
                     new_data = new_data.astype(str)
                     if st.button("Tambahkan data ke Google Sheet"):
                         try:
-                            scopes = ['https.www.googleapis.com/auth/spreadsheets']
+                            scopes = ['https://www.googleapis.com/auth/spreadsheets']
                             creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
                             creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
                             client = gspread.authorize(creds)
