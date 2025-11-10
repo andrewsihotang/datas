@@ -333,7 +333,7 @@ def main_app():
                 st.markdown("### Detail Peserta")
                 st.write(f"Semua pelatihan yang diikuti oleh: **{selected_name}** dari **{selected_school}**")
                 participant_trainings = df[
-                    (df['NAMA_PESERTA'].astype(str).str.strip() == selected_name) &  
+                    (df['NAMA_PESERTA'].astype(str).str.strip() == selected_name) & 
                     (df['NPSN'].astype(str) == selected_npsn) 
                 ][['NAMA_PELATIHAN', 'TANGGAL', 'ASAL_SEKOLAH', 'NPSN']].drop_duplicates().reset_index(drop=True)
                 participant_trainings['TANGGAL'] = pd.to_datetime(participant_trainings['TANGGAL']).dt.strftime('%Y-%m-%d')
@@ -495,39 +495,39 @@ def main_app():
                         untained_df = pd.DataFrame(list(untained_set), columns=['NPSN', 'Nama peserta'])
                         
                         # ==================================================================
-                        # === PERBAIKAN: Ambil Nama Sekolah dari Master Data Sekolah (df_sekolah_sumber) ===
-                        # ==================================================================
-                        # 6. Add School Name
-                        # Buat peta NPSN -> NAMA_SEKOLAH dari data master (df_sekolah_sumber)
-                        # Pastikan sheet 'data_sekolah' Anda memiliki kolom 'NAMA_SEKOLAH' (atau sesuaikan namanya)
-                        
-                        # Ganti 'NAMA_SEKOLAH' jika nama kolomnya berbeda di sheet 'data_sekolah' Anda
-                        NAMA_KOLOM_SEKOLAH_MASTER = 'NAMA_SEKOLAH' 
-                        if NAMA_KOLOM_SEKOLAH_MASTER not in df_sekolah_sumber.columns:
-                            # Fallback jika kolom 'NAMA_SEKOLAH' tidak ada, coba 'ASAL_SEKOLAH'
-                            if 'ASAL_SEKOLAH' in df_sekolah_sumber.columns:
-                                NAMA_KOLOM_SEKOLAH_MASTER = 'ASAL_SEKOLAH'
-                            else:
-                                st.error("Kolom nama sekolah (NAMA_SEKOLAH atau ASAL_SEKOLAH) tidak ditemukan di sheet 'data_sekolah'.")
-                                # Buat kolom kosong agar tidak error
-                                NAMA_KOLOM_SEKOLAH_MASTER = 'NAMA_SEKOLAH' # set fiktif
-                                df_sekolah_sumber[NAMA_KOLOM_SEKOLAH_MASTER] = pd.NA
+                        # === PERBAIKAN: Ambil Nama Sekolah dari Master Data Sekolah (df_sekolah_sumber) ===
+                        # ==================================================================
+                        # 6. Add School Name
+                        # Buat peta NPSN -> NAMA_SEKOLAH dari data master (df_sekolah_sumber)
+                        # Pastikan sheet 'data_sekolah' Anda memiliki kolom 'NAMA_SEKOLAH' (atau sesuaikan namanya)
+                        
+                        # Ganti 'NAMA_SEKOLAH' jika nama kolomnya berbeda di sheet 'data_sekolah' Anda
+                        NAMA_KOLOM_SEKOLAH_MASTER = 'NAMA_SEKOLAH' 
+                        if NAMA_KOLOM_SEKOLAH_MASTER not in df_sekolah_sumber.columns:
+                            # Fallback jika kolom 'NAMA_SEKOLAH' tidak ada, coba 'ASAL_SEKOLAH'
+                            if 'ASAL_SEKOLAH' in df_sekolah_sumber.columns:
+                                NAMA_KOLOM_SEKOLAH_MASTER = 'ASAL_SEKOLAH'
+                            else:
+                                st.error("Kolom nama sekolah (NAMA_SEKOLAH atau ASAL_SEKOLAH) tidak ditemukan di sheet 'data_sekolah'.")
+                                # Buat kolom kosong agar tidak error
+                                NAMA_KOLOM_SEKOLAH_MASTER = 'NAMA_SEKOLAH' # set fiktif
+                                df_sekolah_sumber[NAMA_KOLOM_SEKOLAH_MASTER] = pd.NA
 
-                        school_map_df = df_sekolah_sumber[['NPSN', NAMA_KOLOM_SEKOLAH_MASTER]].copy()
-                        school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.strip()
-                        school_map_df = school_map_df.dropna(subset=['NPSN', NAMA_KOLOM_SEKOLAH_MASTER])
-                        school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
-                        
-                        final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
-                        # ==================================================================
-                        
-                        # 7. Format
-                        # Pastikan kolom (misal 'NAMA_SEKOLAH') ada
-                        if NAMA_KOLOM_SEKOLAH_MASTER not in final_df.columns:
-                            final_df[NAMA_KOLOM_SEKOLAH_MASTER] = pd.NA
-                        
-                        final_df = final_df[[NAMA_KOLOM_SEKOLAH_MASTER, 'NPSN', 'Nama peserta']]
-                        final_df.rename(columns={NAMA_KOLOM_SEKOLAH_MASTER: 'Sekolah'}, inplace=True)
+                        school_map_df = df_sekolah_sumber[['NPSN', NAMA_KOLOM_SEKOLAH_MASTER]].copy()
+                        school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.strip()
+                        school_map_df = school_map_df.dropna(subset=['NPSN', NAMA_KOLOM_SEKOLAH_MASTER])
+                        school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
+                        
+                        final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
+                        # ==================================================================
+                        
+                        # 7. Format
+                        # Pastikan kolom (misal 'NAMA_SEKOLAH') ada
+                        if NAMA_KOLOM_SEKOLAH_MASTER not in final_df.columns:
+                            final_df[NAMA_KOLOM_SEKOLAH_MASTER] = pd.NA
+                        
+                        final_df = final_df[[NAMA_KOLOM_SEKOLAH_MASTER, 'NPSN', 'Nama peserta']]
+                        final_df.rename(columns={NAMA_KOLOM_SEKOLAH_MASTER: 'Sekolah'}, inplace=True)
                         
                         # 8. Create Excel in memory
                         output = io.BytesIO()
@@ -603,7 +603,7 @@ def main_app():
         if not kec_reco_filter: 
             temp_df_status_only = school_list_df.copy()
             if status_reco_filter: 
-                 temp_df_status_only = temp_df_status_only[temp_df_status_only['STATUS'].isin(status_reco_filter)]
+                temp_df_status_only = temp_df_status_only[temp_df_status_only['STATUS'].isin(status_reco_filter)]
             display_schools_df = temp_df_status_only
 
         school_name_list = ["-- Pilih Sekolah --"] + sorted(display_schools_df['ASAL_SEKOLAH'].unique())
@@ -703,7 +703,3 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
-
-
-
-
