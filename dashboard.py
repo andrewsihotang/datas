@@ -518,7 +518,7 @@ def main_app():
                         school_map_df = school_map_df.dropna(subset=['NPSN', NAMA_KOLOM_SEKOLAH_MASTER])
                         school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
                         
-          _                   final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
+                        final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
                         # ==================================================================
                         
                         # 7. Format
@@ -703,6 +703,7 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
 
 
 
