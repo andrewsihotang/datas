@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 import json
+import io  # <-- DITAMBAHKAN: Diperlukan untuk download Excel
 from google.oauth2.service_account import Credentials
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
@@ -86,6 +87,12 @@ if "page" not in st.session_state:
     st.session_state.page = "landing"
 if "current_page" not in st.session_state:
     st.session_state.current_page = 1
+# State untuk download
+if "download_ready" not in st.session_state:
+    st.session_state.download_ready = False
+if "download_data" not in st.session_state:
+    st.session_state.download_data = None
+
 
 def show_landing_page():
     st.markdown(
@@ -449,6 +456,87 @@ def main_app():
     # --- TAB 3: REKOMENDASI PESERTA ---
     with tab_rekomendasi:
         st.subheader("💡 Rekomendasi Peserta (Berdasarkan Data Dapodik)")
+        
+        # ==================================================================
+        # === BAGIAN BARU: Unduh Laporan Lengkap ===
+        # ==================================================================
+        st.markdown("---")
+        st.subheader("Unduh Laporan Lengkap")
+        st.write("Unduh file Excel berisi *semua* peserta dari data Dapodik yang belum terdata pelatihan.")
+        
+        if st.button("Siapkan Laporan Lengkap (Semua Sekolah)"):
+            with st.spinner("Menggabungkan data... Ini mungkin perlu beberapa saat..."):
+                try:
+                    # 1. Load data
+                    df_dapodik_all = load_dapodik_data(json_keyfile_str, spreadsheet_id)
+                    df_sekolah_all = load_school_data(json_keyfile_str, spreadsheet_id) # Sumber data sekolah
+                    
+                    if not df_dapodik_all.empty:
+                        NAMA_KOLOM_NAMA_DAPODIK = 'NAMA_LENGKAP'
+                        
+                        # 2. Get master list (Dapodik)
+                        master_list_df = df_dapodik_all[['NPSN', NAMA_KOLOM_NAMA_DAPODIK]].copy()
+                        master_list_df['NPSN'] = master_list_df['NPSN'].astype(str).str.strip()
+                        master_list_df[NAMA_KOLOM_NAMA_DAPODIK] = master_list_df[NAMA_KOLOM_NAMA_DAPODIK].astype(str).str.strip()
+                        master_list_df = master_list_df.dropna().drop_duplicates()
+                        master_set = set(zip(master_list_df['NPSN'], master_list_df[NAMA_KOLOM_NAMA_DAPODIK]))
+
+                        # 3. Get trained list (from all tabs)
+                        trained_list_df = df[['NPSN', 'NAMA_PESERTA']].copy()
+                        trained_list_df['NPSN'] = trained_list_df['NPSN'].astype(str).str.strip()
+                        trained_list_df['NAMA_PESERTA'] = trained_list_df['NAMA_PESERTA'].astype(str).str.strip()
+                        trained_list_df = trained_list_df.dropna().drop_duplicates()
+                        trained_set = set(zip(trained_list_df['NPSN'], trained_list_df['NAMA_PESERTA']))
+
+                        # 4. Find the difference
+                        untained_set = master_set - trained_set
+                        
+                        # 5. Convert back to DataFrame
+                        untained_df = pd.DataFrame(list(untained_set), columns=['NPSN', 'Nama peserta'])
+                        
+                        # 6. Add School Name
+                        school_map_df = df_sekolah_all[['NPSN', 'ASAL_SEKOLAH']].copy()
+                        school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.strip()
+                        school_map_df = school_map_df.drop_duplicates(subset=['NPSN'])
+                        
+                        final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
+                        
+                        # 7. Format
+                        final_df = final_df[['ASAL_SEKOLAH', 'NPSN', 'Nama peserta']]
+                        final_df.rename(columns={'ASAL_SEKOLAH': 'Sekolah'}, inplace=True)
+                        final_df = final_df.sort_values(by=['Sekolah', 'Nama peserta']).reset_index(drop=True)
+                        
+                        # 8. Create Excel in memory
+                        output = io.BytesIO()
+                        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                            final_df.to_excel(writer, index=False, sheet_name='Belum Pelatihan')
+                        data_to_download = output.getvalue()
+                        
+                        st.session_state['download_data'] = data_to_download
+                        st.session_state['download_ready'] = True
+                        st.success(f"Laporan siap! Ditemukan {len(final_df)} peserta. Klik tombol 'Unduh' di bawah.")
+
+                    else:
+                        st.error("Data Dapodik (data_dapodik_name) tidak dapat dimuat.")
+                except Exception as e:
+                    st.error(f"Gagal memproses laporan: {e}")
+
+        # Tombol download akan muncul di sini setelah data siap
+        if st.session_state.get('download_ready', False):
+            st.download_button(
+                label="✅ Unduh File Excel Sekarang",
+                data=st.session_state['download_data'],
+                file_name=f"rekomendasi_peserta_belum_pelatihan_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                on_click=lambda: st.session_state.update(download_ready=False) # Reset state
+            )
+        
+        st.markdown("---")
+        # ==================================================================
+        # === AKHIR BAGIAN BARU ===
+        # ==================================================================
+        
+        st.subheader("💡 Rekomendasi per Sekolah") # <-- Judul diubah
         st.write("Pilih sekolah untuk melihat daftar nama di Dapodik yang belum terdata mengikuti pelatihan.")
 
         try:
@@ -548,7 +636,7 @@ def main_app():
                     new_data = new_data.astype(str)
                     if st.button("Tambahkan data ke Google Sheet"):
                         try:
-                            scopes = ['https://www.googleapis.com/auth/spreadsheets']
+                            scopes = ['https.www.googleapis.com/auth/spreadsheets']
                             creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
                             creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
                             client = gspread.authorize(creds)
@@ -592,4 +680,3 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
-
