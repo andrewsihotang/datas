@@ -412,7 +412,13 @@ def main_app():
             target = jenjang_targets.get(jenjang, 0)
             df_jenjang = summary_df[summary_df['JENJANG'] == jenjang]
             unique_count = df_jenjang.drop_duplicates(subset=['NAMA_PESERTA', 'ASAL_SEKOLAH']).shape[0]
+            
+            # ==================================================================
+            # === PERUBAHAN: Batasi Persentase di 100% ===
+            # ==================================================================
             percent = min((unique_count / target * 100), 100) if target > 0 else 0
+            # ==================================================================
+            
             kurang = max(0, target - unique_count)
             summary_rows.append({
                 'Jenjang': jenjang, 'Target Jumlah Peserta Pelatihan': f"{target:,} Orang",
@@ -429,7 +435,13 @@ def main_app():
             target = sekolah_targets.get(jenjang, 0)
             df_sekolah = summary_df[summary_df['JENJANG'] == jenjang]
             unique_sekolah_count = df_sekolah['ASAL_SEKOLAH'].nunique()
+            
+            # ==================================================================
+            # === PERUBAHAN: Batasi Persentase di 100% ===
+            # ==================================================================
             percent = min((unique_sekolah_count / target * 100), 100) if target > 0 else 0
+            # ==================================================================
+
             kurang = max(0, target - unique_sekolah_count)
             sekolah_rows.append({
                 'Jenjang': jenjang, 'Target Jumlah Sekolah': f"{target:,} Sekolah",
@@ -446,7 +458,7 @@ def main_app():
         st.subheader("💡 Rekomendasi Peserta (Berdasarkan Data Dapodik)")
         
         # ==================================================================
-        # === BAGIAN YANG DIPERBARUI: Unduh Laporan Lengkap ===
+        # === BAGIAN BARU: Unduh Laporan Lengkap ===
         # ==================================================================
         st.markdown("---")
         st.subheader("Unduh Laporan Lengkap")
@@ -457,21 +469,10 @@ def main_app():
                 try:
                     # 1. Load data
                     df_dapodik_all = load_dapodik_data(json_keyfile_str, spreadsheet_id)
-                    # Data peserta (df) sudah di-load
+                    # Data sekolah (df_sekolah_sumber) dan data peserta (df) sudah di-load
                     
                     if not df_dapodik_all.empty:
-                        
-                        # === PERHATIAN ===
-                        # Pastikan nama kolom untuk nama sekolah di sheet 'data_dapodik_name' Anda BENAR.
-                        # Jika nama kolomnya 'NAMA_SEKOLAH', ganti variabel di bawah ini.
-                        NAMA_KOLOM_SEKOLAH_DI_DAPODIK = 'ASAL_SEKOLAH' 
                         NAMA_KOLOM_NAMA_DAPODIK = 'NAMA_LENGKAP'
-                        
-                        # Cek apakah kolom nama sekolah ada
-                        if NAMA_KOLOM_SEKOLAH_DI_DAPODIK not in df_dapodik_all.columns:
-                            st.error(f"Kolom '{NAMA_KOLOM_SEKOLAH_DI_DAPODIK}' tidak ditemukan di sheet 'data_dapodik_name'.")
-                            st.error("Gagal membuat laporan. Pastikan nama kolom sekolah di GSheet benar.")
-                            st.stop() # Hentikan eksekusi jika kolom tidak ada
                         
                         # 2. Get master list (Dapodik)
                         master_list_df = df_dapodik_all[['NPSN', NAMA_KOLOM_NAMA_DAPODIK]].copy()
@@ -493,19 +494,26 @@ def main_app():
                         # 5. Convert back to DataFrame
                         untained_df = pd.DataFrame(list(untained_set), columns=['NPSN', 'Nama peserta'])
                         
-                        # 6. Add School Name (FROM DAPODIK DATA - INI PERBAIKANNYA)
-                        # Buat peta NPSN -> ASAL_SEKOLAH dari data Dapodik
-                        school_map_df = df_dapodik_all[['NPSN', NAMA_KOLOM_SEKOLAH_DI_DAPODIK]].copy()
+                        # ==================================================================
+                        # === PERBAIKAN: Ambil 'ASAL_SEKOLAH' dari df (data peserta) ===
+                        # ==================================================================
+                        # 6. Add School Name
+                        # Buat peta NPSN -> ASAL_SEKOLAH dari data peserta (df)
+                        school_map_df = df[['NPSN', 'ASAL_SEKOLAH']].copy()
                         school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.strip()
-                        school_map_df = school_map_df.dropna(subset=['NPSN', NAMA_KOLOM_SEKOLAH_DI_DAPODIK])
+                        school_map_df = school_map_df.dropna(subset=['NPSN', 'ASAL_SEKOLAH'])
                         school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
                         
                         final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
+                        # ==================================================================
                         
                         # 7. Format
-                        final_df = final_df[['NPSN', NAMA_KOLOM_SEKOLAH_DI_DAPODIK, 'Nama peserta']]
-                        final_df.rename(columns={NAMA_KOLOM_SEKOLAH_DI_DAPODIK: 'Sekolah'}, inplace=True)
-                        final_df = final_df[['Sekolah', 'NPSN', 'Nama peserta']] # Reorder
+                        # Pastikan kolom 'ASAL_SEKOLAH' ada, jika tidak (misal merge gagal), tambahkan sbg NaN
+                        if 'ASAL_SEKOLAH' not in final_df.columns:
+                            final_df['ASAL_SEKOLAH'] = pd.NA
+                            
+                        final_df = final_df[['ASAL_SEKOLAH', 'NPSN', 'Nama peserta']]
+                        final_df.rename(columns={'ASAL_SEKOLAH': 'Sekolah'}, inplace=True)
                         final_df = final_df.sort_values(by=['Sekolah', 'Nama peserta']).reset_index(drop=True)
                         
                         # 8. Create Excel in memory
@@ -535,18 +543,15 @@ def main_app():
         
         st.markdown("---")
         # ==================================================================
-        # === AKHIR BAGIAN YANG DIPERBARUI ===
+        # === AKHIR BAGIAN BARU ===
         # ==================================================================
         
-        st.subheader("💡 Rekomendasi per Sekolah") 
+        st.subheader("💡 Rekomendasi per Sekolah") # <-- Judul diubah
         st.write("Pilih sekolah untuk melihat daftar nama di Dapodik yang belum terdata mengikuti pelatihan.")
 
         try:
-            # Gunakan 'df' sebagai sumber daftar sekolah untuk dropdown,
-            # karena ini adalah sekolah yang relevan (memiliki data pelatihan)
             school_list_df = df[['NPSN', 'ASAL_SEKOLAH']].dropna(subset=['NPSN'])
             school_list_df = school_list_df.drop_duplicates(subset=['NPSN'], keep='first')
-            # Gabung dengan data sekolah untuk filter STATUS dan KECAMATAN
             school_list_df = school_list_df.merge(df_sekolah_sumber[['NPSN', 'STATUS', 'KECAMATAN', 'KABUPATEN']], on='NPSN', how='left')
             school_list_df = school_list_df.dropna(subset=['STATUS', 'KECAMATAN', 'KABUPATEN']) 
 
@@ -641,7 +646,7 @@ def main_app():
                     new_data = new_data.astype(str)
                     if st.button("Tambahkan data ke Google Sheet"):
                         try:
-                            scopes = ['https.www.googleapis.com/auth/spreadsheets']
+                            scopes = ['https://www.googleapis.com/auth/spreadsheets']
                             creds_dict = json.loads(st.secrets["GSHEET_SERVICE_ACCOUNT"])
                             creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
                             client = gspread.authorize(creds)
@@ -668,8 +673,8 @@ def main_app():
                 <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/tiktok.png" alt="TikTok" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">TikTok P4 JUKS</div>
             </a>
-            <a href="https.youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
-                <img src="https.raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
+            <a href="https://youtube.com/@p4jakartautaradankep-seribu?si=BWAVvVyVdYvbj8Xo" target="blank" style="margin: 0 20px; display: inline-block; text-decoration: none; color: inherit;">
+                <img src="https://raw.githubusercontent.com/andrewsihotang/datas/main/youtube.png" alt="YouTube" width="32" height="32" />
                 <div style="font-size: 0.7rem; margin-top: 4px;">YouTube P4 JUKS</div>
             </a>
         </div>
@@ -685,4 +690,3 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
-
