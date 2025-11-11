@@ -6,8 +6,8 @@ import io  # Diperlukan untuk download Excel
 from google.oauth2.service_account import Credentials
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
 
-# --- CSS for layout and header/logo tweaks, no tall vertical spacing ---
-st.set_page_config(layout="wide") # Set the page to wide mode by default
+# --- CSS for layout and header/logo tweaks ---
+st.set_page_config(layout="wide")
 
 st.markdown("""
 <style>
@@ -25,7 +25,7 @@ st.markdown("""
 [data-testid="stSidebar"] {
     display: none;
 }
-/* Responsive font sizes for the table */
+/* Responsive font sizes */
 @media (max-width: 700px) {
     .ag-root-wrapper, .ag-theme-streamlit input { font-size:11px !important; }
     .ag-header-cell-label, .ag-cell { font-size:10px !important; }
@@ -82,12 +82,11 @@ st.markdown("""
 DISDIK_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/disdik_jakarta.png"
 P4_LOGO_URL = "https://raw.githubusercontent.com/andrewsihotang/datas/main/p4.png"
 
-# Inisialisasi Session State di Awal
+# Inisialisasi Session State
 if "page" not in st.session_state:
     st.session_state.page = "landing"
 if "current_page" not in st.session_state:
     st.session_state.current_page = 1
-# State untuk download
 if "download_ready" not in st.session_state:
     st.session_state.download_ready = False
 if "download_data" not in st.session_state:
@@ -242,7 +241,7 @@ def main_app():
             conditions.append((df['TANGGAL'] >= start_date) & (df['TANGGAL'] <= end_date))
         filtered_df = df[pd.concat(conditions, axis=1).all(axis=1)] if conditions else df.copy()
 
-        # --- NEW: Search Functionality ---
+        # --- Search Functionality ---
         st.markdown("---")
         search_col1, search_col2 = st.columns(2)
         with search_col1:
@@ -426,21 +425,18 @@ def main_app():
         st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
         st.dataframe(df_summary_jenjang, use_container_width=True)
             
-        # ==================================================================
-        # === START OF MODIFICATION: Logika Rekap Sekolah berdasarkan NPSN ===
-        # ==================================================================
+        # --- Logika Rekap Sekolah berdasarkan NPSN ---
         
         sekolah_rows = []
         missing_schools_data = {} # Menyimpan data sekolah yang ada di target tapi belum ikut
-        extra_schools_data = {}   # Menyimpan data sekolah yang ikut tapi tidak ada di target
-
+        
         # Tentukan nama kolom sekolah dari data master
         NAMA_KOLOM_SEKOLAH_MASTER = 'NAMA_SEKOLAH'
         if NAMA_KOLOM_SEKOLAH_MASTER not in filtered_school_data.columns:
             if 'ASAL_SEKOLAH' in filtered_school_data.columns:
                 NAMA_KOLOM_SEKOLAH_MASTER = 'ASAL_SEKOLAH'
             else:
-                NAMA_KOLOM_SEKOLAH_MASTER = 'NPSN' # Fallback jika tidak ada nama
+                NAMA_KOLOM_SEKOLAH_MASTER = 'NPSN' # Fallback
 
         for jenjang in all_jenjang:
             # 1. Dapatkan set NPSN dari data target (data_sekolah yang sudah difilter)
@@ -462,7 +458,7 @@ def main_app():
             target_count = len(target_npsn_set)
             trained_count = len(trained_npsn_set)
             
-            # 4. Hitung persentase (tetap dibatasi 100% untuk tampilan)
+            # 4. Hitung persentase
             percent = min((trained_count / target_count * 100), 100) if target_count > 0 else 0
             kurang = max(0, target_count - trained_count)
             
@@ -472,11 +468,10 @@ def main_app():
                 'Persentase': f"{percent:.2f} %", 'Kurang': f"{kurang:,} Sekolah"
             })
             
-            # 5. Cari perbedaan
+            # 5. Cari perbedaan (Target - Trained) = Missing
             missing_npsn = target_npsn_set - trained_npsn_set
-            extra_npsn = trained_npsn_set - target_npsn_set
             
-            # 6. Simpan detail sekolah yang hilang (yang Anda minta)
+            # 6. Simpan detail sekolah yang hilang
             if missing_npsn:
                 cols_to_show = ['NPSN', NAMA_KOLOM_SEKOLAH_MASTER, 'KECAMATAN', 'KABUPATEN']
                 # Pastikan semua kolom ada di filtered_school_data
@@ -486,17 +481,8 @@ def main_app():
                 ][cols_exist].drop_duplicates(subset=['NPSN']).reset_index(drop=True)
                 missing_df.index += 1
                 missing_schools_data[jenjang] = missing_df
-            
-            # 7. Simpan detail sekolah yang "ekstra" (penyebab >100%)
-            if extra_npsn:
-                cols_to_show = ['NPSN', 'ASAL_SEKOLAH', 'KECAMATAN', 'KABUPATEN']
-                # Pastikan semua kolom ada di data pelatihan (df)
-                cols_exist = [col for col in cols_to_show if col in df.columns]
-                extra_df = df[
-                    df['NPSN'].isin(extra_npsn)
-                ][cols_exist].drop_duplicates(subset=['NPSN']).reset_index(drop=True)
-                extra_df.index += 1
-                extra_schools_data[jenjang] = extra_df
+            else:
+                missing_schools_data[jenjang] = pd.DataFrame() # Kosong jika semua lengkap
                 
         df_summary_sekolah = pd.DataFrame(sekolah_rows).set_index('Jenjang').reindex(all_jenjang).reset_index()
         df_summary_sekolah.index += 1
@@ -504,48 +490,26 @@ def main_app():
         st.dataframe(df_summary_sekolah, use_container_width=True)
 
         st.markdown("---")
-        st.write("### 🔍 Detail Perbandingan Sekolah (berdasarkan NPSN)")
-        st.info("Bagian ini memvalidasi data. Gunakan contoh SMA (95 Target vs 107 Ikut) untuk membaca tabel di bawah.")
+        st.write("### 🔍 Validasi Kelengkapan Sekolah Target")
+        st.info("Bagian ini memastikan apakah **SEMUA** sekolah di daftar target (misal 95 sekolah) sudah masuk di daftar pelatihan (misal 107 sekolah), terlepas dari kelebihan jumlahnya.")
         
         for jenjang in all_jenjang:
             missing_df = missing_schools_data.get(jenjang)
-            extra_df = extra_schools_data.get(jenjang)
             
-            has_missing = missing_df is not None and not missing_df.empty
-            has_extra = extra_df is not None and not extra_df.empty
-            
-            if has_missing or has_extra:
-                label = f"**{jenjang}**: {len(missing_df) if has_missing else 0} Target Belum Ikut | {len(extra_df) if has_extra else 0} Ikut (di Luar Target)"
-                with st.expander(label):
-                    
-                    # ==================================================================
-                    # === START: Perubahan Label untuk Kejelasan ===
-                    # ==================================================================
-                    if has_missing:
-                        # Ini menjawab pertanyaan: "Apakah 95 (Target) ada di 107 (Ikut)?"
-                        st.write(f"**Sekolah di Target yang BELUM ada di daftar Ikut ({len(missing_df)}):**")
-                        st.caption("Jika daftar ini kosong (mis. untuk SMA), berarti semua sekolah target (95 SMA) sudah terdata ikut.")
-                        st.dataframe(missing_df, use_container_width=True)
-                    if has_extra:
-                        # Ini menjelaskan kelebihan/ekstra
-                        st.write(f"**Sekolah di daftar Ikut yang TIDAK ada di Target ({len(extra_df)}):**")
-                        st.caption("Ini adalah sekolah 'ekstra' (mis. 12 SMA). Kemungkinan ini adalah sekolah yang sudah tutup/terminasi namun datanya masih ada di data pelatihan.")
-                        st.dataframe(extra_df, use_container_width=True)
-                    # ==================================================================
-                    # === END: Perubahan Label ===
-                    # ==================================================================
+            with st.expander(f"Detail Validasi Jenjang: **{jenjang}**"):
+                if missing_df is not None and not missing_df.empty:
+                    st.error(f"⚠️ **PERHATIAN:** Ada **{len(missing_df)}** sekolah dari Target yang BELUM mengikuti pelatihan!")
+                    st.write("Meskipun total sekolah yang ikut mungkin sudah melebihi target, sekolah-sekolah di bawah ini tercatat sebagai Target tapi belum ada datanya:")
+                    st.dataframe(missing_df, use_container_width=True)
+                else:
+                    st.success(f"✅ **LENGKAP:** Semua sekolah target pada jenjang {jenjang} sudah terdata mengikuti pelatihan.")
+                    st.caption("Jika jumlah 'Realisasi' lebih besar dari 'Target', itu disebabkan oleh sekolah terminasi/tutup yang datanya masih tersimpan.")
 
-        # ==================================================================
-        # === END OF MODIFICATION ===
-        # ==================================================================
-        
     # --- TAB 3: REKOMENDASI PESERTA ---
     with tab_rekomendasi:
         st.subheader("💡 Rekomendasi Peserta")
         
-        # ==================================================================
-        # === BAGIAN BARU: Unduh Laporan Lengkap ===
-        # ==================================================================
+        # --- Unduh Laporan Lengkap ---
         st.markdown("---")
         st.subheader("Unduh Laporan")
         st.write("Unduh file Excel berisi semua peserta yang belum terdata pelatihan.")
@@ -553,50 +517,33 @@ def main_app():
         if st.button("Download Rekomendasi Peserta"):
             with st.spinner("Menggabungkan data... Ini mungkin perlu beberapa saat..."):
                 try:
-                    # 1. Load data
                     df_dapodik_all = load_dapodik_data(json_keyfile_str, spreadsheet_id)
-                    # Data sekolah (df_sekolah_sumber) dan data peserta (df) sudah di-load
                     
                     if not df_dapodik_all.empty:
                         NAMA_KOLOM_NAMA_DAPODIK = 'NAMA_LENGKAP'
                         
-                        # 2. Get master list (Dapodik)
                         master_list_df = df_dapodik_all[['NPSN', NAMA_KOLOM_NAMA_DAPODIK]].copy()
                         master_list_df['NPSN'] = master_list_df['NPSN'].astype(str).str.strip()
                         master_list_df[NAMA_KOLOM_NAMA_DAPODIK] = master_list_df[NAMA_KOLOM_NAMA_DAPODIK].astype(str).str.strip()
                         master_list_df = master_list_df.dropna().drop_duplicates()
                         master_set = set(zip(master_list_df['NPSN'], master_list_df[NAMA_KOLOM_NAMA_DAPODIK]))
 
-                        # 3. Get trained list (from all tabs)
                         trained_list_df = df[['NPSN', 'NAMA_PESERTA']].copy()
                         trained_list_df['NPSN'] = trained_list_df['NPSN'].astype(str).str.strip()
                         trained_list_df['NAMA_PESERTA'] = trained_list_df['NAMA_PESERTA'].astype(str).str.strip()
                         trained_list_df = trained_list_df.dropna().drop_duplicates()
                         trained_set = set(zip(trained_list_df['NPSN'], trained_list_df['NAMA_PESERTA']))
 
-                        # 4. Find the difference
                         untained_set = master_set - trained_set
-                        
-                        # 5. Convert back to DataFrame
                         untained_df = pd.DataFrame(list(untained_set), columns=['NPSN', 'Nama peserta'])
                         
-                        # ==================================================================
-                        # === PERBAIKAN: Ambil Nama Sekolah dari Master Data Sekolah (df_sekolah_sumber) ===
-                        # ==================================================================
-                        # 6. Add School Name
-                        # Buat peta NPSN -> NAMA_SEKOLAH dari data master (df_sekolah_sumber)
-                        # Pastikan sheet 'data_sekolah' Anda memiliki kolom 'NAMA_SEKOLAH' (atau sesuaikan namanya)
-                        
-                        # Ganti 'NAMA_SEKOLAH' jika nama kolomnya berbeda di sheet 'data_sekolah' Anda
                         NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' 
                         if NAMA_KOLOM_SEKOLAH_MASTER_RECO not in df_sekolah_sumber.columns:
-                            # Fallback jika kolom 'NAMA_SEKOLAH' tidak ada, coba 'ASAL_SEKOLAH'
                             if 'ASAL_SEKOLAH' in df_sekolah_sumber.columns:
                                 NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'ASAL_SEKOLAH'
                             else:
                                 st.error("Kolom nama sekolah (NAMA_SEKOLAH atau ASAL_SEKOLAH) tidak ditemukan di sheet 'data_sekolah'.")
-                                # Buat kolom kosong agar tidak error
-                                NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' # set fiktif
+                                NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' 
                                 df_sekolah_sumber[NAMA_KOLOM_SEKOLAH_MASTER_RECO] = pd.NA
 
                         school_map_df = df_sekolah_sumber[['NPSN', NAMA_KOLOM_SEKOLAH_MASTER_RECO]].copy()
@@ -605,17 +552,12 @@ def main_app():
                         school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
                         
                         final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
-                        # ==================================================================
-                        
-                        # 7. Format
-                        # Pastikan kolom (misal 'NAMA_SEKOLAH') ada
                         if NAMA_KOLOM_SEKOLAH_MASTER_RECO not in final_df.columns:
                             final_df[NAMA_KOLOM_SEKOLAH_MASTER_RECO] = pd.NA
                         
                         final_df = final_df[[NAMA_KOLOM_SEKOLAH_MASTER_RECO, 'NPSN', 'Nama peserta']]
                         final_df.rename(columns={NAMA_KOLOM_SEKOLAH_MASTER_RECO: 'Sekolah'}, inplace=True)
                         
-                        # 8. Create Excel in memory
                         output = io.BytesIO()
                         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                             final_df.to_excel(writer, index=False, sheet_name='Belum Pelatihan')
@@ -630,22 +572,19 @@ def main_app():
                 except Exception as e:
                     st.error(f"Gagal memproses laporan: {e}")
 
-        # Tombol download akan muncul di sini setelah data siap
         if st.session_state.get('download_ready', False):
             st.download_button(
                 label="✅ Unduh File Excel Sekarang",
                 data=st.session_state['download_data'],
                 file_name=f"rekomendasi_peserta_belum_pelatihan_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                on_click=lambda: st.session_state.update(download_ready=False) # Reset state
+                on_click=lambda: st.session_state.update(download_ready=False) 
             )
         
         st.markdown("---")
-        # ==================================================================
-        # === AKHIR BAGIAN BARU ===
-        # ==================================================================
         
-        st.subheader("💡 Rekomendasi per Sekolah") # <-- Judul diubah
+        # --- Rekomendasi per Sekolah ---
+        st.subheader("💡 Rekomendasi per Sekolah") 
         st.write("Pilih sekolah untuk melihat daftar nama di Dapodik yang belum terdata mengikuti pelatihan.")
 
         try:
@@ -758,7 +697,7 @@ def main_app():
             except Exception as e:
                 st.error(f"Gagal membaca file unggahan: {e}")
     
-    # --- FOOTER (DI LUAR SEMUA TAB) ---
+    # --- FOOTER ---
     st.markdown("---")
     st.markdown(f'*Data cutoff: {pd.Timestamp.now(tz="Asia/Jakarta").strftime("%d %B %Y")}*')
     st.markdown(
@@ -781,7 +720,6 @@ def main_app():
         unsafe_allow_html=True,
     )
 
-# Main flow control
 if st.session_state.page == "landing":
     show_landing_page()
 elif st.session_state.page == "main":
