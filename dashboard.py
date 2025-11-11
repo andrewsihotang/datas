@@ -541,7 +541,7 @@ def main_app():
             has_missing = missing_df is not None and not missing_df.empty
             
             # Tampilkan expander untuk setiap jenjang
-            label = f"**{jenjang}**: Klik untuk memvalidasi {len(missing_df) if has_missing else 0} sekolah target yang belum terdata"
+            label = f"**{jenjang}**: Terdapat {len(missing_df) if has_missing else 0} sekolah yang belum terdata ikut pelatihan"
             with st.expander(label):
                 if has_missing:
                     # Ini adalah daftar yang Anda minta
@@ -805,3 +805,4 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
