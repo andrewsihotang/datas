@@ -526,7 +526,7 @@ def main_app():
             
         df_summary_sekolah = pd.DataFrame(sekolah_rows).set_index('Jenjang').reindex(all_jenjang).reset_index()
         df_summary_sekolah.index += 1
-        st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah (by NPSN)')
+        st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
         st.dataframe(df_summary_sekolah, use_container_width=True)
 
         st.markdown("---")
@@ -805,6 +805,7 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
 
 
 
