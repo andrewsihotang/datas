@@ -530,7 +530,7 @@ def main_app():
         st.dataframe(df_summary_sekolah, use_container_width=True)
 
         st.markdown("---")
-        st.write("### 🔍 Validasi Sekolah Target yang Belum Ikut Pelatihan")
+        st.write("### 🔍 List Sekolah yang Belum Ikut Pelatihan")
         st.info("Bagian ini menampilkan jumlah sekolah yang belum ikut pelatihan.")
         
         # ==================================================================
@@ -805,6 +805,7 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
 
 
 
