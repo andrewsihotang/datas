@@ -413,11 +413,7 @@ def main_app():
             df_jenjang = summary_df[summary_df['JENJANG'] == jenjang]
             unique_count = df_jenjang.drop_duplicates(subset=['NAMA_PESERTA', 'ASAL_SEKOLAH']).shape[0]
             
-            # ==================================================================
-            # === PERUBAHAN: Batasi Persentase di 100% ===
-            # ==================================================================
             percent = min((unique_count / target * 100), 100) if target > 0 else 0
-            # ==================================================================
             
             kurang = max(0, target - unique_count)
             summary_rows.append({
@@ -509,7 +505,7 @@ def main_app():
 
         st.markdown("---")
         st.write("### 🔍 Detail Perbandingan Sekolah (berdasarkan NPSN)")
-        st.info("Bagian ini menunjukkan sekolah mana yang ada di 'Target' tapi belum ada di 'Jumlah (unique)', dan sebaliknya (sekolah 'ekstra' yang menyebabkan >100%).")
+        st.info("Bagian ini memvalidasi data. Gunakan contoh SMA (95 Target vs 107 Ikut) untuk membaca tabel di bawah.")
         
         for jenjang in all_jenjang:
             missing_df = missing_schools_data.get(jenjang)
@@ -521,12 +517,23 @@ def main_app():
             if has_missing or has_extra:
                 label = f"**{jenjang}**: {len(missing_df) if has_missing else 0} Target Belum Ikut | {len(extra_df) if has_extra else 0} Ikut (di Luar Target)"
                 with st.expander(label):
+                    
+                    # ==================================================================
+                    # === START: Perubahan Label untuk Kejelasan ===
+                    # ==================================================================
                     if has_missing:
-                        st.write(f"**Sekolah di Target (Data Master) Belum Terdata Ikut Pelatihan ({len(missing_df)}):**")
+                        # Ini menjawab pertanyaan: "Apakah 95 (Target) ada di 107 (Ikut)?"
+                        st.write(f"**Sekolah di Target yang BELUM ada di daftar Ikut ({len(missing_df)}):**")
+                        st.caption("Jika daftar ini kosong (mis. untuk SMA), berarti semua sekolah target (95 SMA) sudah terdata ikut.")
                         st.dataframe(missing_df, use_container_width=True)
                     if has_extra:
-                        st.write(f"**Sekolah Ikut Pelatihan (Data Pelatihan) Tidak Ada di Target Terfilter ({len(extra_df)}):**")
+                        # Ini menjelaskan kelebihan/ekstra
+                        st.write(f"**Sekolah di daftar Ikut yang TIDAK ada di Target ({len(extra_df)}):**")
+                        st.caption("Ini adalah sekolah 'ekstra' (mis. 12 SMA). Kemungkinan ini adalah sekolah yang sudah tutup/terminasi namun datanya masih ada di data pelatihan.")
                         st.dataframe(extra_df, use_container_width=True)
+                    # ==================================================================
+                    # === END: Perubahan Label ===
+                    # ==================================================================
 
         # ==================================================================
         # === END OF MODIFICATION ===
@@ -581,20 +588,20 @@ def main_app():
                         # Pastikan sheet 'data_sekolah' Anda memiliki kolom 'NAMA_SEKOLAH' (atau sesuaikan namanya)
                         
                         # Ganti 'NAMA_SEKOLAH' jika nama kolomnya berbeda di sheet 'data_sekolah' Anda
-                        NAMA_KOLOM_SEKOLAH_MASTER = 'NAMA_SEKOLAH' 
-                        if NAMA_KOLOM_SEKOLAH_MASTER not in df_sekolah_sumber.columns:
+                        NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' 
+                        if NAMA_KOLOM_SEKOLAH_MASTER_RECO not in df_sekolah_sumber.columns:
                             # Fallback jika kolom 'NAMA_SEKOLAH' tidak ada, coba 'ASAL_SEKOLAH'
                             if 'ASAL_SEKOLAH' in df_sekolah_sumber.columns:
-                                NAMA_KOLOM_SEKOLAH_MASTER = 'ASAL_SEKOLAH'
+                                NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'ASAL_SEKOLAH'
                             else:
                                 st.error("Kolom nama sekolah (NAMA_SEKOLAH atau ASAL_SEKOLAH) tidak ditemukan di sheet 'data_sekolah'.")
                                 # Buat kolom kosong agar tidak error
-                                NAMA_KOLOM_SEKOLAH_MASTER = 'NAMA_SEKOLAH' # set fiktif
-                                df_sekolah_sumber[NAMA_KOLOM_SEKOLAH_MASTER] = pd.NA
+                                NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' # set fiktif
+                                df_sekolah_sumber[NAMA_KOLOM_SEKOLAH_MASTER_RECO] = pd.NA
 
-                        school_map_df = df_sekolah_sumber[['NPSN', NAMA_KOLOM_SEKOLAH_MASTER]].copy()
+                        school_map_df = df_sekolah_sumber[['NPSN', NAMA_KOLOM_SEKOLAH_MASTER_RECO]].copy()
                         school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.strip()
-                        school_map_df = school_map_df.dropna(subset=['NPSN', NAMA_KOLOM_SEKOLAH_MASTER])
+                        school_map_df = school_map_df.dropna(subset=['NPSN', NAMA_KOLOM_SEKOLAH_MASTER_RECO])
                         school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
                         
                         final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
@@ -602,11 +609,11 @@ def main_app():
                         
                         # 7. Format
                         # Pastikan kolom (misal 'NAMA_SEKOLAH') ada
-                        if NAMA_KOLOM_SEKOLAH_MASTER not in final_df.columns:
-                            final_df[NAMA_KOLOM_SEKOLAH_MASTER] = pd.NA
+                        if NAMA_KOLOM_SEKOLAH_MASTER_RECO not in final_df.columns:
+                            final_df[NAMA_KOLOM_SEKOLAH_MASTER_RECO] = pd.NA
                         
-                        final_df = final_df[[NAMA_KOLOM_SEKOLAH_MASTER, 'NPSN', 'Nama peserta']]
-                        final_df.rename(columns={NAMA_KOLOM_SEKOLAH_MASTER: 'Sekolah'}, inplace=True)
+                        final_df = final_df[[NAMA_KOLOM_SEKOLAH_MASTER_RECO, 'NPSN', 'Nama peserta']]
+                        final_df.rename(columns={NAMA_KOLOM_SEKOLAH_MASTER_RECO: 'Sekolah'}, inplace=True)
                         
                         # 8. Create Excel in memory
                         output = io.BytesIO()
