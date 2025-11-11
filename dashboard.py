@@ -194,7 +194,15 @@ def main_app():
     if 'STASUS_SEKOLAH' in df.columns:
         df.rename(columns={'STASUS_SEKOLAH': 'STATUS_SEKOLAH'}, inplace=True)
     df = df.loc[:, ~df.columns.duplicated(keep='first')]
-    df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce')
+    
+    # ==================================================================
+    # === START: Perbaikan (Mengatasi UserWarning) ===
+    # ==================================================================
+    df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce', dayfirst=True)
+    # ==================================================================
+    # === END: Perbaikan ===
+    # ==================================================================
+    
     if 'NPSN' in df.columns:
         df['NPSN'] = df['NPSN'].astype(str)
     if 'STATUS_SEKOLAH' not in df.columns:
@@ -355,11 +363,11 @@ def main_app():
         )
 
         # ==================================================================
-        # === START: Perubahan (Hardcode filter Kabupaten) ===
+        # === START: Perbaikan (Filter Kabupaten Hardcode + Perbaikan Logika) ===
         # ==================================================================
         target_kabupaten_rekap = ['KOTA ADM. JAKARTA UTARA', 'KAB. ADM. KEP. SERIBU']
 
-        # 1. Pre-filter data master sekolah
+        # 1. Pre-filter data master sekolah (TARGET)
         if 'KABUPATEN' not in df_sekolah_sumber.columns:
             st.error("Kolom 'KABUPATEN' tidak ditemukan di 'data_sekolah'. Filter Jakut/Kep. Seribu tidak dapat diterapkan.")
             df_sekolah_sumber_rekap = df_sekolah_sumber.copy()
@@ -368,29 +376,47 @@ def main_app():
                 df_sekolah_sumber['KABUPATEN'].isin(target_kabupaten_rekap)
             ].copy()
 
-        # 2. Pre-filter data pelatihan
-        if 'KABUPATEN' not in df.columns:
-            st.error("Kolom 'KABUPATEN' tidak ditemukan di data pelatihan (Tendik/Pendidik/Kejuruan). Filter Jakut/Kep. Seribu tidak dapat diterapkan.")
-            df_pelatihan_rekap = df.copy()
-        else:
-             df_pelatihan_rekap = df[
-                df['KABUPATEN'].isin(target_kabupaten_rekap)
-            ].copy()
+        # 2. Dapatkan SET NPSN dari data master yang sudah difilter
+        npsn_jakut_ks = set(df_sekolah_sumber_rekap['NPSN'].astype(str))
+
+        # 3. Pre-filter data PELATIHAN (df) berdasarkan SET NPSN
+        df_pelatihan_rekap = df[df['NPSN'].astype(str).isin(npsn_jakut_ks)].copy()
         
-        # Hapus filter multiselect kabupaten, sisakan status
+        # 4. Hapus filter multiselect kabupaten, sisakan status
         summary_status_filter = st.multiselect(
             'Filter Status Sekolah (Negeri/Swasta)',
             options=df_sekolah_sumber_rekap['STATUS'].dropna().unique(), # Opsi dari data yg sudah difilter
             key="summary_status_filter"
         )
         # ==================================================================
-        # === END: Perubahan ===
+        # === END: Perbaikan ===
         # ==================================================================
 
         # Gunakan `df_sekolah_sumber_rekap` sebagai basis
         filtered_school_data = df_sekolah_sumber_rekap.copy()
         if summary_status_filter:
             filtered_school_data = filtered_school_data[filtered_school_data['STATUS'].isin(summary_status_filter)]
+        
+        # ==================================================================
+        # === START: Perbaikan (Mengembalikan fungsi yang hilang) ===
+        # ==================================================================
+        def get_dynamic_targets(filtered_df_sekolah, pelatihan_filter_choice):
+            df_sekolah = filtered_df_sekolah.copy() 
+            if pelatihan_filter_choice != 'Pendidik':
+                df_sekolah = df_sekolah[df_sekolah['TIPE'] != 'SLB'].copy()
+            df_sekolah['KEPALA_SEKOLAH'] = pd.to_numeric(df_sekolah['KEPALA_SEKOLAH'], errors='coerce').fillna(0).astype(int)
+            df_sekolah['TENAGA_KEPENDIDIKAN'] = pd.to_numeric(df_sekolah['TENAGA_KEPENDIDIKAN'], errors='coerce').fillna(0).astype(int)
+            df_sekolah['GURU'] = pd.to_numeric(df_sekolah['GURU'], errors='coerce').fillna(0).astype(int)
+            if pelatihan_filter_choice == 'Pendidik':
+                df_sekolah['TARGET_PESERTA'] = df_sekolah['GURU']
+            else: 
+                df_sekolah['TARGET_PESERTA'] = df_sekolah['KEPALA_SEKOLAH'] + df_sekolah['TENAGA_KEPENDIDIKAN']
+            jenjang_targets = df_sekolah.groupby('TIPE')['TARGET_PESERTA'].sum().to_dict()
+            sekolah_targets = df_sekolah.groupby('TIPE').size().to_dict()
+            return jenjang_targets, sekolah_targets
+        # ==================================================================
+        # === END: Perbaikan ===
+        # ==================================================================
         
         jenjang_targets, sekolah_targets = get_dynamic_targets(filtered_school_data, rekap_pelatihan_choice)
         npsn_to_show = filtered_school_data['NPSN'].astype(str).unique() # NPSN dari data yg sudah difilter
