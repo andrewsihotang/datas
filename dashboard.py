@@ -531,7 +531,7 @@ def main_app():
 
         st.markdown("---")
         st.write("### 🔍 Validasi Sekolah Target yang Belum Ikut Pelatihan")
-        st.info("Bagian ini memvalidasi apakah sekolah di 'Target Jumlah Sekolah' sudah ada di 'Jumlah Sekolah (unique)'.")
+        st.info("Bagian ini menampilkan jumlah sekolah yang belum ikut pelatihan.")
         
         # ==================================================================
         # === START: Perubahan Tampilan Expander Sesuai Permintaan ===
@@ -805,4 +805,5 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
 
