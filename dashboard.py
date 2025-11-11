@@ -546,7 +546,7 @@ def main_app():
                 if has_missing:
                     # Ini adalah daftar yang Anda minta
                     st.write(f"**Daftar Sekolah di Target yang BELUM Terdata Ikut Pelatihan ({len(missing_df)}):**")
-                    st.caption("Ini adalah daftar sekolah (termasuk sekolah baru) yang ada di daftar Target Anda, tetapi belum terdata di 'Jumlah Sekolah (unique)'.")
+                    st.caption("Ini adalah daftar sekolah yang ada di data Dapodik, tetapi belum terdata mengikuti pelatihan")
                     st.dataframe(missing_df, use_container_width=True)
                 else:
                     # Ini adalah konfirmasi yang Anda minta (contoh: untuk kasus SMA)
@@ -805,5 +805,6 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
 
 
