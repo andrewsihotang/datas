@@ -430,29 +430,108 @@ def main_app():
         st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jenjang')
         st.dataframe(df_summary_jenjang, use_container_width=True)
             
+        # ==================================================================
+        # === START OF MODIFICATION: Logika Rekap Sekolah berdasarkan NPSN ===
+        # ==================================================================
+        
         sekolah_rows = []
-        for jenjang in all_jenjang:
-            target = sekolah_targets.get(jenjang, 0)
-            df_sekolah = summary_df[summary_df['JENJANG'] == jenjang]
-            unique_sekolah_count = df_sekolah['ASAL_SEKOLAH'].nunique()
-            
-            # ==================================================================
-            # === PERUBAHAN: Batasi Persentase di 100% ===
-            # ==================================================================
-            percent = min((unique_sekolah_count / target * 100), 100) if target > 0 else 0
-            # ==================================================================
+        missing_schools_data = {} # Menyimpan data sekolah yang ada di target tapi belum ikut
+        extra_schools_data = {}   # Menyimpan data sekolah yang ikut tapi tidak ada di target
 
-            kurang = max(0, target - unique_sekolah_count)
+        # Tentukan nama kolom sekolah dari data master
+        NAMA_KOLOM_SEKOLAH_MASTER = 'NAMA_SEKOLAH'
+        if NAMA_KOLOM_SEKOLAH_MASTER not in filtered_school_data.columns:
+            if 'ASAL_SEKOLAH' in filtered_school_data.columns:
+                NAMA_KOLOM_SEKOLAH_MASTER = 'ASAL_SEKOLAH'
+            else:
+                NAMA_KOLOM_SEKOLAH_MASTER = 'NPSN' # Fallback jika tidak ada nama
+
+        for jenjang in all_jenjang:
+            # 1. Dapatkan set NPSN dari data target (data_sekolah yang sudah difilter)
+            target_npsn_set = set(filtered_school_data[
+                (filtered_school_data['TIPE'] == jenjang) &
+                (filtered_school_data['NPSN'].notna()) &
+                (filtered_school_data['NPSN'] != '')
+            ]['NPSN'].astype(str))
+            
+            # 2. Dapatkan set NPSN dari data pelatihan (summary_df)
+            df_sekolah_jenjang = summary_df[
+                (summary_df['JENJANG'] == jenjang) &
+                (summary_df['NPSN'].notna()) &
+                (summary_df['NPSN'] != '')
+            ]
+            trained_npsn_set = set(df_sekolah_jenjang['NPSN'].astype(str))
+
+            # 3. Hitung jumlah
+            target_count = len(target_npsn_set)
+            trained_count = len(trained_npsn_set)
+            
+            # 4. Hitung persentase (tetap dibatasi 100% untuk tampilan)
+            percent = min((trained_count / target_count * 100), 100) if target_count > 0 else 0
+            kurang = max(0, target_count - trained_count)
+            
             sekolah_rows.append({
-                'Jenjang': jenjang, 'Target Jumlah Sekolah': f"{target:,} Sekolah",
-                'Jumlah Sekolah (unique)': f"{unique_sekolah_count:,} Sekolah",
+                'Jenjang': jenjang, 'Target Jumlah Sekolah': f"{target_count:,} Sekolah",
+                'Jumlah Sekolah (unique)': f"{trained_count:,} Sekolah",
                 'Persentase': f"{percent:.2f} %", 'Kurang': f"{kurang:,} Sekolah"
             })
+            
+            # 5. Cari perbedaan
+            missing_npsn = target_npsn_set - trained_npsn_set
+            extra_npsn = trained_npsn_set - target_npsn_set
+            
+            # 6. Simpan detail sekolah yang hilang (yang Anda minta)
+            if missing_npsn:
+                cols_to_show = ['NPSN', NAMA_KOLOM_SEKOLAH_MASTER, 'KECAMATAN', 'KABUPATEN']
+                # Pastikan semua kolom ada di filtered_school_data
+                cols_exist = [col for col in cols_to_show if col in filtered_school_data.columns]
+                missing_df = filtered_school_data[
+                    filtered_school_data['NPSN'].isin(missing_npsn)
+                ][cols_exist].drop_duplicates(subset=['NPSN']).reset_index(drop=True)
+                missing_df.index += 1
+                missing_schools_data[jenjang] = missing_df
+            
+            # 7. Simpan detail sekolah yang "ekstra" (penyebab >100%)
+            if extra_npsn:
+                cols_to_show = ['NPSN', 'ASAL_SEKOLAH', 'KECAMATAN', 'KABUPATEN']
+                # Pastikan semua kolom ada di data pelatihan (df)
+                cols_exist = [col for col in cols_to_show if col in df.columns]
+                extra_df = df[
+                    df['NPSN'].isin(extra_npsn)
+                ][cols_exist].drop_duplicates(subset=['NPSN']).reset_index(drop=True)
+                extra_df.index += 1
+                extra_schools_data[jenjang] = extra_df
+                
         df_summary_sekolah = pd.DataFrame(sekolah_rows).set_index('Jenjang').reindex(all_jenjang).reset_index()
         df_summary_sekolah.index += 1
-        st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah')
+        st.write(f'### Rekap Pencapaian Pelatihan {prefix} berdasarkan Jumlah Sekolah (by NPSN)')
         st.dataframe(df_summary_sekolah, use_container_width=True)
-    
+
+        st.markdown("---")
+        st.write("### 🔍 Detail Perbandingan Sekolah (berdasarkan NPSN)")
+        st.info("Bagian ini menunjukkan sekolah mana yang ada di 'Target' tapi belum ada di 'Jumlah (unique)', dan sebaliknya (sekolah 'ekstra' yang menyebabkan >100%).")
+        
+        for jenjang in all_jenjang:
+            missing_df = missing_schools_data.get(jenjang)
+            extra_df = extra_schools_data.get(jenjang)
+            
+            has_missing = missing_df is not None and not missing_df.empty
+            has_extra = extra_df is not None and not extra_df.empty
+            
+            if has_missing or has_extra:
+                label = f"**{jenjang}**: {len(missing_df) if has_missing else 0} Target Belum Ikut | {len(extra_df) if has_extra else 0} Ikut (di Luar Target)"
+                with st.expander(label):
+                    if has_missing:
+                        st.write(f"**Sekolah di Target (Data Master) Belum Terdata Ikut Pelatihan ({len(missing_df)}):**")
+                        st.dataframe(missing_df, use_container_width=True)
+                    if has_extra:
+                        st.write(f"**Sekolah Ikut Pelatihan (Data Pelatihan) Tidak Ada di Target Terfilter ({len(extra_df)}):**")
+                        st.dataframe(extra_df, use_container_width=True)
+
+        # ==================================================================
+        # === END OF MODIFICATION ===
+        # ==================================================================
+        
     # --- TAB 3: REKOMENDASI PESERTA ---
     with tab_rekomendasi:
         st.subheader("💡 Rekomendasi Peserta")
