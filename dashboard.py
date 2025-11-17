@@ -597,39 +597,54 @@ def main_app():
                         untained_df = pd.DataFrame(list(untained_set), columns=['NPSN', 'Nama peserta'])
                         
                         # ==================================================================
-                        # === PERBAIKAN: Ambil Nama Sekolah dari Master Data Sekolah (df_sekolah_sumber) ===
+                        # === PERBAIKAN: Mengambil Detail Sekolah + Jenjang + Sudin ===
                         # ==================================================================
-                        # 6. Add School Name
-                        # Buat peta NPSN -> NAMA_SEKOLAH dari data master (df_sekolah_sumber)
-                        # Pastikan sheet 'data_sekolah' Anda memiliki kolom 'NAMA_SEKOLAH' (atau sesuaikan namanya)
+                        # 6. Add School Details
                         
-                        # Ganti 'NAMA_SEKOLAH' jika nama kolomnya berbeda di sheet 'data_sekolah' Anda
+                        # Tentukan nama kolom untuk Nama Sekolah
                         NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' 
                         if NAMA_KOLOM_SEKOLAH_MASTER_RECO not in df_sekolah_sumber.columns:
-                            # Fallback jika kolom 'NAMA_SEKOLAH' tidak ada, coba 'ASAL_SEKOLAH'
                             if 'ASAL_SEKOLAH' in df_sekolah_sumber.columns:
                                 NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'ASAL_SEKOLAH'
                             else:
-                                st.error("Kolom nama sekolah (NAMA_SEKOLAH atau ASAL_SEKOLAH) tidak ditemukan di sheet 'data_sekolah'.")
-                                # Buat kolom kosong agar tidak error
-                                NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' # set fiktif
+                                NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' 
                                 df_sekolah_sumber[NAMA_KOLOM_SEKOLAH_MASTER_RECO] = pd.NA
 
-                        school_map_df = df_sekolah_sumber[['NPSN', NAMA_KOLOM_SEKOLAH_MASTER_RECO]].copy()
+                        # Kolom yang ingin diambil dari data master sekolah
+                        # Pastikan nama kolom ini ada di df_sekolah_sumber (yang sudah di-upper di awal)
+                        # 'TIPE' = Jenjang, 'STATUS' = Status Sekolah, 'KECAMATAN', 'KABUPATEN' = Sudin
+                        desired_cols = ['NPSN', NAMA_KOLOM_SEKOLAH_MASTER_RECO, 'TIPE', 'STATUS', 'KECAMATAN', 'KABUPATEN']
+                        
+                        # Filter hanya kolom yang benar-benar ada untuk menghindari error
+                        existing_cols = [c for c in desired_cols if c in df_sekolah_sumber.columns]
+                        
+                        school_map_df = df_sekolah_sumber[existing_cols].copy()
                         school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.strip()
-                        school_map_df = school_map_df.dropna(subset=['NPSN', NAMA_KOLOM_SEKOLAH_MASTER_RECO])
+                        school_map_df = school_map_df.dropna(subset=['NPSN'])
                         school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
                         
                         final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
                         # ==================================================================
                         
-                        # 7. Format
-                        # Pastikan kolom (misal 'NAMA_SEKOLAH') ada
-                        if NAMA_KOLOM_SEKOLAH_MASTER_RECO not in final_df.columns:
-                            final_df[NAMA_KOLOM_SEKOLAH_MASTER_RECO] = pd.NA
+                        # 7. Format & Rename
+                        # Rename kolom sesuai permintaan
+                        rename_dict = {
+                            NAMA_KOLOM_SEKOLAH_MASTER_RECO: 'Sekolah',
+                            'TIPE': 'Jenjang',
+                            'STATUS': 'Status Sekolah',
+                            'KECAMATAN': 'Kecamatan',
+                            'KABUPATEN': 'Sudin'
+                        }
+                        final_df.rename(columns=rename_dict, inplace=True)
+
+                        # Pastikan kolom yang diminta ada di output, isi NA jika tidak ada
+                        required_output_cols = ['Sekolah', 'NPSN', 'Jenjang', 'Status Sekolah', 'Kecamatan', 'Sudin', 'Nama peserta']
+                        for col in required_output_cols:
+                            if col not in final_df.columns:
+                                final_df[col] = pd.NA
                         
-                        final_df = final_df[[NAMA_KOLOM_SEKOLAH_MASTER_RECO, 'NPSN', 'Nama peserta']]
-                        final_df.rename(columns={NAMA_KOLOM_SEKOLAH_MASTER_RECO: 'Sekolah'}, inplace=True)
+                        # Reorder kolom
+                        final_df = final_df[required_output_cols]
                         
                         # 8. Create Excel in memory
                         output = io.BytesIO()
