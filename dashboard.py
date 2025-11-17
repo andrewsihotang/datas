@@ -172,17 +172,12 @@ def main_app():
         df_dapodik = load_data_from_gsheets(json_keyfile_str, spreadsheet_id, 'data_dapodik_name')
         df_dapodik.columns = [col.strip().upper() for col in df_dapodik.columns]
         NAMA_KOLOM_NAMA = 'NAMA_LENGKAP' 
-        
-        # Validasi kolom minimum untuk pencocokan
         if 'NPSN' not in df_dapodik.columns or NAMA_KOLOM_NAMA not in df_dapodik.columns:
             st.error(f"Sheet 'data_dapodik_name' harus memiliki kolom 'NPSN' dan '{NAMA_KOLOM_NAMA}'")
             return pd.DataFrame()
-        
-        # Cleaning data kunci
         df_dapodik['NPSN'] = df_dapodik['NPSN'].astype(str)
         df_dapodik[NAMA_KOLOM_NAMA] = df_dapodik[NAMA_KOLOM_NAMA].astype(str).str.strip()
-        
-        # Return full dataframe (semua kolom)
+        df_dapodik = df_dapodik.dropna(subset=['NPSN', NAMA_KOLOM_NAMA])
         return df_dapodik
 
     # --- Load Data ---
@@ -565,103 +560,86 @@ def main_app():
         st.subheader("💡 Rekomendasi Peserta")
         
         # ==================================================================
-        # === BAGIAN BARU: Unduh Laporan Lengkap (Modified) ===
+        # === BAGIAN BARU: Unduh Laporan Lengkap ===
         # ==================================================================
         st.markdown("---")
         st.subheader("Unduh Laporan")
-        st.write("Unduh file Excel berisi peserta (Dapodik) yang belum terdata pelatihan, lengkap dengan detail.")
+        st.write("Unduh file Excel berisi semua peserta yang belum terdata pelatihan.")
         
         if st.button("Download Rekomendasi Peserta"):
             with st.spinner("Menggabungkan data... Ini mungkin perlu beberapa saat..."):
                 try:
-                    # 1. Load FULL data Dapodik (termasuk kolom JK, Kepegawaian, dll)
+                    # 1. Load data
                     df_dapodik_all = load_dapodik_data(json_keyfile_str, spreadsheet_id)
+                    # Data sekolah (df_sekolah_sumber) dan data peserta (df) sudah di-load
                     
                     if not df_dapodik_all.empty:
                         NAMA_KOLOM_NAMA_DAPODIK = 'NAMA_LENGKAP'
-
-                        # 2. Create Key for trained checking (NPSN + NAMA)
-                        # Normalisasi string untuk pencocokan
-                        df_dapodik_all['match_key'] = df_dapodik_all['NPSN'].astype(str).str.strip() + "_" + df_dapodik_all[NAMA_KOLOM_NAMA_DAPODIK].astype(str).str.strip().str.lower()
                         
-                        # 3. Create Key from Trained Data
+                        # 2. Get master list (Dapodik)
+                        master_list_df = df_dapodik_all[['NPSN', NAMA_KOLOM_NAMA_DAPODIK]].copy()
+                        master_list_df['NPSN'] = master_list_df['NPSN'].astype(str).str.strip()
+                        master_list_df[NAMA_KOLOM_NAMA_DAPODIK] = master_list_df[NAMA_KOLOM_NAMA_DAPODIK].astype(str).str.strip()
+                        master_list_df = master_list_df.dropna().drop_duplicates()
+                        master_set = set(zip(master_list_df['NPSN'], master_list_df[NAMA_KOLOM_NAMA_DAPODIK]))
+
+                        # 3. Get trained list (from all tabs)
                         trained_list_df = df[['NPSN', 'NAMA_PESERTA']].copy()
+                        trained_list_df['NPSN'] = trained_list_df['NPSN'].astype(str).str.strip()
+                        trained_list_df['NAMA_PESERTA'] = trained_list_df['NAMA_PESERTA'].astype(str).str.strip()
                         trained_list_df = trained_list_df.dropna().drop_duplicates()
-                        trained_keys = set(
-                            trained_list_df['NPSN'].astype(str).str.strip() + "_" + trained_list_df['NAMA_PESERTA'].astype(str).str.strip().str.lower()
-                        )
+                        trained_set = set(zip(trained_list_df['NPSN'], trained_list_df['NAMA_PESERTA']))
 
-                        # 4. Filter: Keep only rows in Dapodik that are NOT in trained_keys
-                        untrained_df = df_dapodik_all[~df_dapodik_all['match_key'].isin(trained_keys)].copy()
+                        # 4. Find the difference
+                        untained_set = master_set - trained_set
+                        
+                        # 5. Convert back to DataFrame
+                        untained_df = pd.DataFrame(list(untained_set), columns=['NPSN', 'Nama peserta'])
                         
                         # ==================================================================
-                        # === PENGGABUNGAN DATA SEKOLAH (Jenjang, Status, Kec, Sudin) ===
+                        # === PERBAIKAN: Ambil Nama Sekolah dari Master Data Sekolah (df_sekolah_sumber) ===
                         # ==================================================================
-                        # Kita ambil data sekolah dari MASTER DATA SEKOLAH (df_sekolah_sumber)
-                        # agar konsisten dengan filter di dashboard
+                        # 6. Add School Name
+                        # Buat peta NPSN -> NAMA_SEKOLAH dari data master (df_sekolah_sumber)
+                        # Pastikan sheet 'data_sekolah' Anda memiliki kolom 'NAMA_SEKOLAH' (atau sesuaikan namanya)
                         
-                        # Persiapan tabel sekolah untuk merge
-                        school_master_cols = ['NPSN', 'TIPE', 'STATUS', 'KECAMATAN', 'KABUPATEN']
-                        # Cek nama kolom Nama Sekolah di master
-                        col_sekolah_name = 'NAMA_SEKOLAH'
-                        if col_sekolah_name not in df_sekolah_sumber.columns:
+                        # Ganti 'NAMA_SEKOLAH' jika nama kolomnya berbeda di sheet 'data_sekolah' Anda
+                        NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' 
+                        if NAMA_KOLOM_SEKOLAH_MASTER_RECO not in df_sekolah_sumber.columns:
+                            # Fallback jika kolom 'NAMA_SEKOLAH' tidak ada, coba 'ASAL_SEKOLAH'
                             if 'ASAL_SEKOLAH' in df_sekolah_sumber.columns:
-                                col_sekolah_name = 'ASAL_SEKOLAH'
+                                NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'ASAL_SEKOLAH'
                             else:
-                                df_sekolah_sumber['NAMA_SEKOLAH_TEMP'] = pd.NA
-                                col_sekolah_name = 'NAMA_SEKOLAH_TEMP'
+                                st.error("Kolom nama sekolah (NAMA_SEKOLAH atau ASAL_SEKOLAH) tidak ditemukan di sheet 'data_sekolah'.")
+                                # Buat kolom kosong agar tidak error
+                                NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' # set fiktif
+                                df_sekolah_sumber[NAMA_KOLOM_SEKOLAH_MASTER_RECO] = pd.NA
+
+                        school_map_df = df_sekolah_sumber[['NPSN', NAMA_KOLOM_SEKOLAH_MASTER_RECO]].copy()
+                        school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.strip()
+                        school_map_df = school_map_df.dropna(subset=['NPSN', NAMA_KOLOM_SEKOLAH_MASTER_RECO])
+                        school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
                         
-                        school_master_cols.append(col_sekolah_name)
-                        
-                        # Filter kolom yang ada saja
-                        existing_school_cols = [c for c in school_master_cols if c in df_sekolah_sumber.columns]
-                        df_sekolah_merge = df_sekolah_sumber[existing_school_cols].copy()
-                        df_sekolah_merge['NPSN'] = df_sekolah_merge['NPSN'].astype(str).str.strip()
-                        df_sekolah_merge = df_sekolah_merge.drop_duplicates(subset=['NPSN'])
-                        
-                        # Merge: Dapodik (Kiri) + Sekolah (Kanan)
-                        final_df = untrained_df.merge(df_sekolah_merge, on='NPSN', how='left')
-                        
+                        final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
                         # ==================================================================
-                        # === SELECT & RENAME COLUMNS ===
-                        # ==================================================================
-                        # Mapping kolom Dapodik (sesuaikan dengan nama di sheet Anda jika berbeda sedikit)
-                        # Asumsi nama kolom di sheet data_dapodik_name sudah standard upper case
                         
-                        # Daftar kolom output yang diinginkan
-                        # Format: (Nama Kolom di Dataframe -> Nama Header Excel)
-                        col_mapping = {
-                            NAMA_KOLOM_NAMA_DAPODIK: 'Nama Lengkap',
-                            'NPSN': 'NPSN',
-                            col_sekolah_name: 'Nama Sekolah',
-                            'JENIS_KELAMIN': 'Jenis Kelamin',
-                            'STATUS_KEPEGAWAIAN': 'Kepegawaian',
-                            'PENDIDIKAN_TERAKHIR': 'Pendidikan',
-                            'MATA_PELAJARAN_DIAJARKAN': 'Mata Pelajaran',
-                            'JABATAN_PTK': 'Jabatan',
-                            'TIPE': 'Jenjang',
-                            'STATUS': 'Status Sekolah',
-                            'KECAMATAN': 'Kecamatan',
-                            'KABUPATEN': 'Sudin'
-                        }
+                        # 7. Format
+                        # Pastikan kolom (misal 'NAMA_SEKOLAH') ada
+                        if NAMA_KOLOM_SEKOLAH_MASTER_RECO not in final_df.columns:
+                            final_df[NAMA_KOLOM_SEKOLAH_MASTER_RECO] = pd.NA
                         
-                        # Pastikan kolom sumber ada, jika tidak isi NA
-                        for src_col in col_mapping.keys():
-                            if src_col not in final_df.columns:
-                                final_df[src_col] = pd.NA
-                        
-                        # Select & Rename
-                        final_output = final_df[list(col_mapping.keys())].rename(columns=col_mapping)
+                        final_df = final_df[[NAMA_KOLOM_SEKOLAH_MASTER_RECO, 'NPSN', 'Nama peserta']]
+                        final_df.rename(columns={NAMA_KOLOM_SEKOLAH_MASTER_RECO: 'Sekolah'}, inplace=True)
                         
                         # 8. Create Excel in memory
                         output = io.BytesIO()
                         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                            final_output.to_excel(writer, index=False, sheet_name='Belum Pelatihan')
+                            final_df.to_excel(writer, index=False, sheet_name='Belum Pelatihan')
                         data_to_download = output.getvalue()
                         
                         st.session_state['download_data'] = data_to_download
                         st.session_state['download_ready'] = True
-                        st.success(f"Laporan siap! Ditemukan {len(final_output)} data rekomendasi. Klik tombol 'Unduh' di bawah.")
+                        st.success(f"Laporan siap! Ditemukan {len(final_df)} peserta. Klik tombol 'Unduh' di bawah.")
 
                     else:
                         st.error("Data Dapodik (data_dapodik_name) tidak dapat dimuat.")
@@ -673,7 +651,7 @@ def main_app():
             st.download_button(
                 label="✅ Unduh File Excel Sekarang",
                 data=st.session_state['download_data'],
-                file_name=f"rekomendasi_peserta_lengkap_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
+                file_name=f"rekomendasi_peserta_belum_pelatihan_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 on_click=lambda: st.session_state.update(download_ready=False) # Reset state
             )
@@ -683,7 +661,7 @@ def main_app():
         # === AKHIR BAGIAN BARU ===
         # ==================================================================
         
-        st.subheader("💡 Rekomendasi per Sekolah") 
+        st.subheader("💡 Rekomendasi per Sekolah") # <-- Judul diubah
         st.write("Pilih sekolah untuk melihat daftar nama di Dapodik yang belum terdata mengikuti pelatihan.")
 
         try:
