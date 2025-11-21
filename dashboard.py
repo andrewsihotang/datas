@@ -567,41 +567,60 @@ def main_app():
         st.write("Unduh file Excel berisi semua peserta yang belum terdata pelatihan.")
         
         if st.button("Download Rekomendasi Peserta"):
-            with st.spinner("Menggabungkan data... Ini mungkin perlu beberapa saat..."):
+            with st.spinner("Menggabungkan dan memvalidasi data..."):
                 try:
-                    # 1. Load data
+                    # 1. Load data Dapodik (Master)
                     df_dapodik_all = load_dapodik_data(json_keyfile_str, spreadsheet_id)
-                    # Data sekolah (df_sekolah_sumber) dan data peserta (df) sudah di-load
                     
                     if not df_dapodik_all.empty:
                         NAMA_KOLOM_NAMA_DAPODIK = 'NAMA_LENGKAP'
                         
-                        # 2. Get master list (Dapodik)
+                        # --- PERBAIKAN LOGIKA START ---
+                        
+                        # A. Siapkan Master List (Dapodik)
                         master_list_df = df_dapodik_all[['NPSN', NAMA_KOLOM_NAMA_DAPODIK]].copy()
-                        master_list_df['NPSN'] = master_list_df['NPSN'].astype(str).str.strip()
-                        master_list_df[NAMA_KOLOM_NAMA_DAPODIK] = master_list_df[NAMA_KOLOM_NAMA_DAPODIK].astype(str).str.strip()
-                        master_list_df = master_list_df.dropna().drop_duplicates()
-                        master_set = set(zip(master_list_df['NPSN'], master_list_df[NAMA_KOLOM_NAMA_DAPODIK]))
+                        # Bersihkan NPSN: String, Strip, Hapus .0 jika ada (efek dari float excel)
+                        master_list_df['NPSN'] = master_list_df['NPSN'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                        
+                        # Normalisasi Nama Dapodik: Huruf Besar, Strip, Hapus Titik/Koma
+                        master_list_df['NAMA_CLEAN'] = master_list_df[NAMA_KOLOM_NAMA_DAPODIK].astype(str).str.strip().str.upper()
+                        master_list_df['NAMA_CLEAN'] = master_list_df['NAMA_CLEAN'].str.replace(r'[.,]', '', regex=True)
+                        
+                        # Simpan Data Asli untuk nanti ditampilkan kembali, tapi gunakan NAMA_CLEAN untuk kunci unik
+                        # Kita gunakan Dictionary untuk mapping: (NPSN, NAMA_CLEAN) -> NAMA_ASLI
+                        master_dict = dict(zip(
+                            zip(master_list_df['NPSN'], master_list_df['NAMA_CLEAN']), 
+                            master_list_df[NAMA_KOLOM_NAMA_DAPODIK]
+                        ))
+                        master_set_keys = set(master_dict.keys())
 
-                        # 3. Get trained list (from all tabs)
+                        # B. Siapkan Trained List (Data Pelatihan)
                         trained_list_df = df[['NPSN', 'NAMA_PESERTA']].copy()
-                        trained_list_df['NPSN'] = trained_list_df['NPSN'].astype(str).str.strip()
-                        trained_list_df['NAMA_PESERTA'] = trained_list_df['NAMA_PESERTA'].astype(str).str.strip()
-                        trained_list_df = trained_list_df.dropna().drop_duplicates()
-                        trained_set = set(zip(trained_list_df['NPSN'], trained_list_df['NAMA_PESERTA']))
+                        # Bersihkan NPSN Pelatihan sama persis dengan Dapodik
+                        trained_list_df['NPSN'] = trained_list_df['NPSN'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+                        
+                        # Normalisasi Nama Pelatihan: Sama persis (Upper + Hapus titik/koma)
+                        trained_list_df['NAMA_CLEAN'] = trained_list_df['NAMA_PESERTA'].astype(str).str.strip().str.upper()
+                        trained_list_df['NAMA_CLEAN'] = trained_list_df['NAMA_CLEAN'].str.replace(r'[.,]', '', regex=True)
+                        
+                        trained_set_keys = set(zip(trained_list_df['NPSN'], trained_list_df['NAMA_CLEAN']))
 
-                        # 4. Find the difference
-                        untained_set = master_set - trained_set
+                        # C. Cari Selisih (Set Difference) menggunakan KUNCI YANG SUDAH DINORMALISASI
+                        untained_keys = master_set_keys - trained_set_keys
                         
-                        # 5. Convert back to DataFrame
-                        untained_df = pd.DataFrame(list(untained_set), columns=['NPSN', 'Nama peserta'])
+                        # D. Kembalikan ke bentuk Data Asli
+                        # Kita ambil Nama Asli dari master_dict berdasarkan key yang belum pelatihan
+                        final_data_list = []
+                        for key in untained_keys:
+                            npsn_val, _ = key
+                            nama_asli_val = master_dict[key]
+                            final_data_list.append({'NPSN': npsn_val, 'Nama peserta': nama_asli_val})
                         
-                        # ==================================================================
-                        # === PERBAIKAN: Mengambil Detail Sekolah + Jenjang + Sudin ===
-                        # ==================================================================
-                        # 6. Add School Details
+                        untained_df = pd.DataFrame(final_data_list)
                         
-                        # Tentukan nama kolom untuk Nama Sekolah
+                        # --- PERBAIKAN LOGIKA END ---
+
+                        # 6. Add School Details (Sama seperti kode sebelumnya)
                         NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' 
                         if NAMA_KOLOM_SEKOLAH_MASTER_RECO not in df_sekolah_sumber.columns:
                             if 'ASAL_SEKOLAH' in df_sekolah_sumber.columns:
@@ -610,24 +629,18 @@ def main_app():
                                 NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' 
                                 df_sekolah_sumber[NAMA_KOLOM_SEKOLAH_MASTER_RECO] = pd.NA
 
-                        # Kolom yang ingin diambil dari data master sekolah
-                        # Pastikan nama kolom ini ada di df_sekolah_sumber (yang sudah di-upper di awal)
-                        # 'TIPE' = Jenjang, 'STATUS' = Status Sekolah, 'KECAMATAN', 'KABUPATEN' = Sudin
                         desired_cols = ['NPSN', NAMA_KOLOM_SEKOLAH_MASTER_RECO, 'TIPE', 'STATUS', 'KECAMATAN', 'KABUPATEN']
-                        
-                        # Filter hanya kolom yang benar-benar ada untuk menghindari error
                         existing_cols = [c for c in desired_cols if c in df_sekolah_sumber.columns]
                         
                         school_map_df = df_sekolah_sumber[existing_cols].copy()
-                        school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.strip()
+                        # Pastikan NPSN di map sekolah juga bersih
+                        school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                         school_map_df = school_map_df.dropna(subset=['NPSN'])
                         school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
                         
                         final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
-                        # ==================================================================
-                        
+
                         # 7. Format & Rename
-                        # Rename kolom sesuai permintaan
                         rename_dict = {
                             NAMA_KOLOM_SEKOLAH_MASTER_RECO: 'Sekolah',
                             'TIPE': 'Jenjang',
@@ -637,13 +650,11 @@ def main_app():
                         }
                         final_df.rename(columns=rename_dict, inplace=True)
 
-                        # Pastikan kolom yang diminta ada di output, isi NA jika tidak ada
                         required_output_cols = ['Sekolah', 'NPSN', 'Jenjang', 'Status Sekolah', 'Kecamatan', 'Sudin', 'Nama peserta']
                         for col in required_output_cols:
                             if col not in final_df.columns:
                                 final_df[col] = pd.NA
                         
-                        # Reorder kolom
                         final_df = final_df[required_output_cols]
                         
                         # 8. Create Excel in memory
@@ -820,3 +831,4 @@ elif st.session_state.page == "main":
 else:
     st.session_state.page = "landing"
     show_landing_page()
+
