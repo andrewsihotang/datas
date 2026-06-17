@@ -259,13 +259,8 @@ def main_app():
             search_school = st.text_input("Cari Asal Sekolah", key="search_school_input", placeholder="Ketik nama sekolah untuk mencari...")
 
         search_results_df = filtered_df.copy()
-
-        # --- KODE JEBAKAN SEMENTARA (UNTUK SCREENSHOT) ---
-        search_results_df['NAMA_PESERTA'] = 123.45 
-        # -------------------------------------------------
-        
         if search_name:
-            search_results_df = search_results_df[search_results_df['NAMA_PESERTA'].str.contains(search_name, case=False)]
+            search_results_df = search_results_df[search_results_df['NAMA_PESERTA'].str.contains(search_name, case=False, na=False)]
         if search_school:
             search_results_df = search_results_df[search_results_df['ASAL_SEKOLAH'].str.contains(search_school, case=False, na=False)]
 
