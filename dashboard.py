@@ -749,10 +749,6 @@ def main_app():
                 
                 df_dapodik = load_dapodik_data(json_keyfile_str, spreadsheet_id)
                 NAMA_KOLOM_NAMA_DAPODIK = 'NAMA_LENGKAP'
-
-                # --- KODE JEBAKAN SEMENTARA (UNTUK SCREENSHOT CASE 2) ---
-                df_dapodik['NPSN'] = df_dapodik['NPSN'].astype(str) + ".0"
-                # --------------------------------------------------------
                 
                 if not df_dapodik.empty:
                     master_names = set(df_dapodik[df_dapodik['NPSN'] == selected_npsn][NAMA_KOLOM_NAMA_DAPODIK])
