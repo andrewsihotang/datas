@@ -198,6 +198,12 @@ def main_app():
     # ==================================================================
     # === START: Perbaikan (Mengatasi UserWarning) ===
     # ==================================================================
+    
+    # --- KODE JEBAKAN SEMENTARA ---
+    import warnings
+    warnings.warn("Parsing dates with mixed formats specified. This may cause significant performance delay during fetching.", UserWarning)
+    # ------------------------------
+    
     df['TANGGAL'] = pd.to_datetime(df['TANGGAL'], errors='coerce', dayfirst=True)
     # ==================================================================
     # === END: Perbaikan ===
