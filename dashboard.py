@@ -211,57 +211,46 @@ def main_app():
     if 'NAMA_PESERTA' in df.columns:
         df['NAMA_PESERTA'] = df['NAMA_PESERTA'].astype(str).str.strip()
 
+    
 
+# ==================================================================
+    # === START: SISTEM DETEKSI ANOMALI & DATA GANDA (EVIDENCE 5.1) ===
     # ==================================================================
-    # === START: SISTEM DETEKSI ANOMALI (EVIDENCE 5.1) ===
-    # ==================================================================
-    # Deteksi sel kosong ('', 'nan', atau null) pada kolom vital
+    # 1. DETEKSI & HAPUS BLANK CELL DARI SISTEM
     kondisi_nama_kosong = (df['NAMA_PESERTA'] == '') | (df['NAMA_PESERTA'].str.lower() == 'nan') | df['NAMA_PESERTA'].isna()
     kondisi_npsn_kosong = (df['NPSN'] == '') | (df['NPSN'].str.lower() == 'nan') | df['NPSN'].isna()
     
     df_anomali = df[kondisi_nama_kosong | kondisi_npsn_kosong]
-
     if not df_anomali.empty:
         st.error(f"🚨 PERINGATAN ANOMALI DATA: Ditemukan {len(df_anomali)} baris dengan sel kosong (Blank Cell) di pangkalan data!")
-        st.warning("Sistem mendeteksi adanya data peserta yang dibiarkan kosong (Nama Peserta / NPSN). Harap Admin segera melengkapi data pada Google Sheet untuk menghindari kegagalan sistem.")
+        st.warning("Sistem mendeteksi adanya data peserta yang dibiarkan kosong. Harap Admin segera melengkapi data pada Google Sheet.")
         with st.expander("🔍 Klik di sini untuk melihat detail data yang kosong"):
-            # Menampilkan preview data yang rusak agar panitia tahu mana yang harus diperbaiki
             st.dataframe(df_anomali[['TANGGAL', 'NAMA_PELATIHAN', 'NAMA_PESERTA', 'ASAL_SEKOLAH', 'NPSN']], use_container_width=True)
-    # ==================================================================
-    # === END: SISTEM DETEKSI ANOMALI ===
-    # ==================================================================
+            
+    # PENTING: Buang data kosong dari memori (df) agar tidak masuk ke Tab Rekomendasi
+    df = df[~kondisi_nama_kosong & ~kondisi_npsn_kosong].copy()
 
-    # ==================================================================
-    # === START: SISTEM DETEKSI DATA GANDA (EVIDENCE 5.1) ===
-    # ==================================================================
-    # Memfilter baris yang memiliki Nama Peserta, NPSN, dan Nama Pelatihan yang sama persis
-    # Kita abaikan dulu yang blank agar tidak terjadi false positive
-    df_valid = df[~kondisi_nama_kosong & ~kondisi_npsn_kosong].copy()
-    
-    # Mendeteksi baris duplikat (keep=False untuk menampilkan semua baris yang ganda)
-    mask_ganda = df_valid.duplicated(subset=['NAMA_PESERTA', 'NPSN', 'NAMA_PELATIHAN'], keep=False)
-    df_ganda = df_valid[mask_ganda]
+    # 2. DETEKSI & HAPUS DATA GANDA (REDUDANSI)
+    # df sekarang sudah bersih dari blank cell, kita lanjut periksa data ganda
+    mask_ganda = df.duplicated(subset=['NAMA_PESERTA', 'NPSN', 'NAMA_PELATIHAN'], keep=False)
+    df_ganda = df[mask_ganda]
 
     if not df_ganda.empty:
         jumlah_kasus = df_ganda.drop_duplicates(subset=['NAMA_PESERTA', 'NPSN', 'NAMA_PELATIHAN']).shape[0]
         st.warning(f"⚠️ PERINGATAN REDUDANSI: Ditemukan {jumlah_kasus} kasus data peserta terdaftar ganda pada pelatihan yang sama!")
-        
         with st.expander("👀 Klik di sini untuk melihat detail data peserta yang ganda"):
-            st.caption("Daftar di bawah ini adalah entri ganda. Sistem secara otomatis HANYA akan memproses 1 data (menyaring sisanya) agar tidak terjadi pemanggilan ganda.")
-            # Diurutkan berdasarkan nama agar terlihat jelas data mana yang kembar berdampingan
+            st.caption("Daftar di bawah ini adalah entri ganda. Sistem secara otomatis HANYA akan memproses 1 data agar tidak terjadi pemanggilan ganda.")
             st.dataframe(df_ganda[['TANGGAL', 'NAMA_PELATIHAN', 'NAMA_PESERTA', 'ASAL_SEKOLAH', 'NPSN']].sort_values(by=['NAMA_PESERTA']), use_container_width=True)
             
-        # Sistem langsung membuang data duplikat dari DataFrame utama agar perhitungan rekap & tabel bersih
-        df = df.drop_duplicates(subset=['NAMA_PESERTA', 'NPSN', 'NAMA_PELATIHAN'], keep='first')
+    # PENTING: Buang duplikat dari memori (df), sisakan 1 saja (keep='first')
+    df = df.drop_duplicates(subset=['NAMA_PESERTA', 'NPSN', 'NAMA_PELATIHAN'], keep='first')
     # ==================================================================
-    # === END: SISTEM DETEKSI DATA GANDA ===
+    # === END: SISTEM DETEKSI ANOMALI & DATA GANDA ===
     # ==================================================================
+
+
 
     
-
-
-    
-
     # --- PEMBUATAN TAB ---
     tab_data_peserta, tab_rekap, tab_rekomendasi, tab_upload = st.tabs([
         "📊 Data Peserta Pelatihan", 
