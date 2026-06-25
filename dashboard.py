@@ -211,6 +211,25 @@ def main_app():
     if 'NAMA_PESERTA' in df.columns:
         df['NAMA_PESERTA'] = df['NAMA_PESERTA'].astype(str).str.strip()
 
+    # ==================================================================
+    # === START: SISTEM DETEKSI ANOMALI (EVIDENCE 5.1) ===
+    # ==================================================================
+    # Deteksi sel kosong ('', 'nan', atau null) pada kolom vital
+    kondisi_nama_kosong = (df['NAMA_PESERTA'] == '') | (df['NAMA_PESERTA'].str.lower() == 'nan') | df['NAMA_PESERTA'].isna()
+    kondisi_npsn_kosong = (df['NPSN'] == '') | (df['NPSN'].str.lower() == 'nan') | df['NPSN'].isna()
+    
+    df_anomali = df[kondisi_nama_kosong | kondisi_npsn_kosong]
+
+    if not df_anomali.empty:
+        st.error(f"🚨 PERINGATAN ANOMALI DATA: Ditemukan {len(df_anomali)} baris dengan sel kosong (Blank Cell) di pangkalan data!")
+        st.warning("Sistem mendeteksi adanya data peserta yang dibiarkan kosong (Nama Peserta / NPSN). Harap Admin segera melengkapi data pada Google Sheet untuk menghindari kegagalan sistem.")
+        with st.expander("🔍 Klik di sini untuk melihat detail data yang kosong"):
+            # Menampilkan preview data yang rusak agar panitia tahu mana yang harus diperbaiki
+            st.dataframe(df_anomali[['TANGGAL', 'NAMA_PELATIHAN', 'NAMA_PESERTA', 'ASAL_SEKOLAH', 'NPSN']], use_container_width=True)
+    # ==================================================================
+    # === END: SISTEM DETEKSI ANOMALI ===
+    # ==================================================================
+
     # --- PEMBUATAN TAB ---
     tab_data_peserta, tab_rekap, tab_rekomendasi, tab_upload = st.tabs([
         "📊 Data Peserta Pelatihan", 
