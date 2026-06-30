@@ -796,24 +796,67 @@ def main_app():
                 NAMA_KOLOM_NAMA_DAPODIK = 'NAMA_LENGKAP'
                 
                 if not df_dapodik.empty:
-                    master_names = set(df_dapodik[df_dapodik['NPSN'] == selected_npsn][NAMA_KOLOM_NAMA_DAPODIK])
-                    trained_names = set(df[df['NPSN'] == selected_npsn]['NAMA_PESERTA'])
-                    recommendation_list = sorted(list(master_names - trained_names))
+                    # 1. Ambil data guru dari Dapodik khusus untuk sekolah ini
+                    dapodik_sekolah = df_dapodik[df_dapodik['NPSN'] == selected_npsn].copy()
                     
-                    st.write(f"Ditemukan **{len(recommendation_list)}** orang di **{selected_school_name}** (NPSN: {selected_npsn}) yang belum terdata pelatihan:")
-                    
-                    if recommendation_list:
-                        reco_df = pd.DataFrame(recommendation_list, columns=["Nama (Rekomendasi)"])
-                        reco_df.index += 1
-                        st.dataframe(reco_df, use_container_width=True, height=300)
+                    if dapodik_sekolah.empty:
+                        st.warning("Tidak ada data nama ditemukan di sheet 'data_dapodik_name' untuk sekolah ini.")
                     else:
-                        if not master_names:
-                            st.warning("Tidak ada data nama ditemukan di sheet 'data_dapodik_name' untuk sekolah ini.")
+                        # 2. Normalisasi nama di Dapodik untuk pencocokan yang akurat
+                        dapodik_sekolah['NAMA_CLEAN'] = dapodik_sekolah[NAMA_KOLOM_NAMA_DAPODIK].astype(str).str.strip().str.upper()
+                        dapodik_sekolah['NAMA_CLEAN'] = dapodik_sekolah['NAMA_CLEAN'].str.replace(r'[.,]', '', regex=True)
+                        
+                        # 3. Ambil data pelatihan khusus untuk sekolah ini
+                        pelatihan_sekolah = df[df['NPSN'] == selected_npsn].copy()
+                        
+                        # 4. Normalisasi nama dan hitung frekuensi per orang di data pelatihan
+                        pelatihan_sekolah['NAMA_CLEAN'] = pelatihan_sekolah['NAMA_PESERTA'].astype(str).str.strip().str.upper()
+                        pelatihan_sekolah['NAMA_CLEAN'] = pelatihan_sekolah['NAMA_CLEAN'].str.replace(r'[.,]', '', regex=True)
+                        frekuensi_df = pelatihan_sekolah['NAMA_CLEAN'].value_counts().reset_index()
+                        frekuensi_df.columns = ['NAMA_CLEAN', 'JUMLAH_PELATIHAN']
+                        
+                        # 5. Gabungkan Dapodik dengan Frekuensi Pelatihan
+                        reco_df = dapodik_sekolah.merge(frekuensi_df, on='NAMA_CLEAN', how='left')
+                        reco_df['JUMLAH_PELATIHAN'] = reco_df['JUMLAH_PELATIHAN'].fillna(0).astype(int)
+                        
+                        # 6. Buat Indikator Prioritas agar ramah pengguna (UX)
+                        def tentukan_prioritas(jml):
+                            if jml == 0: return "🚨 Belum Pernah (Prioritas)"
+                            elif jml == 1: return "🟡 Pernah 1x"
+                            else: return f"✅ Sudah Sering ({jml}x)"
+                            
+                        reco_df['STATUS_UNDANGAN'] = reco_df['JUMLAH_PELATIHAN'].apply(tentukan_prioritas)
+                        
+                        # 7. UI Filter Frekuensi
+                        st.write(f"### Analisis Target Peserta: **{selected_school_name}**")
+                        filter_frekuensi = st.radio(
+                            "Filter Riwayat Pelatihan Peserta:",
+                            ["Tampilkan Semua", "Belum Pernah Sama Sekali (0x)", "Pernah 1x", "Sudah Lebih dari 1x"],
+                            horizontal=True
+                        )
+                        
+                        # Terapkan Filter
+                        if filter_frekuensi == "Belum Pernah Sama Sekali (0x)":
+                            tampil_df = reco_df[reco_df['JUMLAH_PELATIHAN'] == 0]
+                        elif filter_frekuensi == "Pernah 1x":
+                            tampil_df = reco_df[reco_df['JUMLAH_PELATIHAN'] == 1]
+                        elif filter_frekuensi == "Sudah Lebih dari 1x":
+                            tampil_df = reco_df[reco_df['JUMLAH_PELATIHAN'] > 1]
                         else:
-                            st.success("Semua nama di data Dapodik sekolah ini sudah terdata mengikuti pelatihan.")
+                            tampil_df = reco_df
+                            
+                        # Format tabel untuk ditampilkan
+                        tampil_df = tampil_df[[NAMA_KOLOM_NAMA_DAPODIK, 'JUMLAH_PELATIHAN', 'STATUS_UNDANGAN']].rename(
+                            columns={NAMA_KOLOM_NAMA_DAPODIK: 'Nama Peserta (Dapodik)', 'JUMLAH_PELATIHAN': 'Frekuensi Ikut'}
+                        ).sort_values(by=['Frekuensi Ikut', 'Nama Peserta (Dapodik)']).reset_index(drop=True)
+                        tampil_df.index += 1
+                        
+                        st.caption(f"Menampilkan {len(tampil_df)} dari total {len(reco_df)} data Dapodik sekolah ini.")
+                        st.dataframe(tampil_df, use_container_width=True, height=350)
+                        
             except Exception as e:
                 st.error(f"Gagal memproses data rekomendasi. Pastikan sheet 'data_dapodik_name' ada. Error: {e}")
-    
+
     # --- TAB 4: UPLOAD DATA ---
     with tab_upload:
         st.header("Upload Data Terbaru")
