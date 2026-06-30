@@ -856,6 +856,9 @@ def main_app():
                         
             except Exception as e:
                 st.error(f"Gagal memproses data rekomendasi. Pastikan sheet 'data_dapodik_name' ada. Error: {e}")
+        else:
+            # ---> INI ADALAH TAMBAHAN UI PETUNJUKNYA <---
+            st.info("👈 Silakan pilih nama sekolah pada menu 'Pilih Sekolah' di atas untuk memunculkan analisis prioritas undangan peserta.")
 
     # --- TAB 4: UPLOAD DATA ---
     with tab_upload:
