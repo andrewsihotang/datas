@@ -214,6 +214,7 @@ def main_app():
     
 
 # ==================================================================
+    # ==================================================================
     # === START: SISTEM DETEKSI ANOMALI & DATA GANDA (EVIDENCE 5.1) ===
     # ==================================================================
     # 1. DETEKSI & HAPUS BLANK CELL DARI SISTEM
@@ -221,7 +222,10 @@ def main_app():
     kondisi_npsn_kosong = (df['NPSN'] == '') | (df['NPSN'].str.lower() == 'nan') | df['NPSN'].isna()
     
     df_anomali = df[kondisi_nama_kosong | kondisi_npsn_kosong]
-    if not df_anomali.empty:
+    
+    # --- UI PERINGATAN DISembunyikan SEMENTARA UNTUK PRESENTASI ---
+    # Ganti 'False' menjadi 'not df_anomali.empty' untuk memunculkan peringatan lagi nanti
+    if False: 
         st.error(f"🚨 PERINGATAN ANOMALI DATA: Ditemukan {len(df_anomali)} baris dengan sel kosong (Blank Cell) di pangkalan data!")
         st.warning("Sistem mendeteksi adanya data peserta yang dibiarkan kosong. Harap Admin segera melengkapi data pada Google Sheet.")
         with st.expander("🔍 Klik di sini untuk melihat detail data yang kosong"):
@@ -235,7 +239,9 @@ def main_app():
     mask_ganda = df.duplicated(subset=['NAMA_PESERTA', 'NPSN', 'NAMA_PELATIHAN'], keep=False)
     df_ganda = df[mask_ganda]
 
-    if not df_ganda.empty:
+    # --- UI PERINGATAN DISembunyikan SEMENTARA UNTUK PRESENTASI ---
+    # Ganti 'False' menjadi 'not df_ganda.empty' untuk memunculkan peringatan lagi nanti
+    if False: 
         jumlah_kasus = df_ganda.drop_duplicates(subset=['NAMA_PESERTA', 'NPSN', 'NAMA_PELATIHAN']).shape[0]
         st.warning(f"⚠️ PERINGATAN REDUDANSI: Ditemukan {jumlah_kasus} kasus data peserta terdaftar ganda pada pelatihan yang sama!")
         with st.expander("👀 Klik di sini untuk melihat detail data peserta yang ganda"):
@@ -247,8 +253,7 @@ def main_app():
     # ==================================================================
     # === END: SISTEM DETEKSI ANOMALI & DATA GANDA ===
     # ==================================================================
-
-
+# ==================================================================
 
     
     # --- PEMBUATAN TAB ---
