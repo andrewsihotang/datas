@@ -605,14 +605,14 @@ def main_app():
         st.subheader("💡 Rekomendasi Peserta")
         
         # ==================================================================
-        # === BAGIAN BARU: Unduh Laporan Lengkap ===
+        # === BAGIAN BARU: Unduh Laporan Lengkap dengan Frekuensi ===
         # ==================================================================
         st.markdown("---")
-        st.subheader("Unduh Laporan")
-        st.write("Unduh file Excel berisi semua peserta yang belum terdata pelatihan.")
+        st.subheader("Unduh Laporan Komprehensif")
+        st.write("Unduh file Excel berisi seluruh data peserta Dapodik dilengkapi dengan jumlah kehadiran pelatihannya (0x, 1x, >1x). Panitia dapat dengan mudah melakukan filter data pada file Excel yang diunduh.")
         
         if st.button("Download Rekomendasi Peserta"):
-            with st.spinner("Menggabungkan dan memvalidasi data..."):
+            with st.spinner("Menggabungkan Dapodik dan menghitung frekuensi kehadiran..."):
                 try:
                     # 1. Load data Dapodik (Master)
                     df_dapodik_all = load_dapodik_data(json_keyfile_str, spreadsheet_id)
@@ -620,52 +620,34 @@ def main_app():
                     if not df_dapodik_all.empty:
                         NAMA_KOLOM_NAMA_DAPODIK = 'NAMA_LENGKAP'
                         
-                        # --- PERBAIKAN LOGIKA START ---
-                        
                         # A. Siapkan Master List (Dapodik)
                         master_list_df = df_dapodik_all[['NPSN', NAMA_KOLOM_NAMA_DAPODIK]].copy()
-                        # Bersihkan NPSN: String, Strip, Hapus .0 jika ada (efek dari float excel)
                         master_list_df['NPSN'] = master_list_df['NPSN'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                        
-                        # Normalisasi Nama Dapodik: Huruf Besar, Strip, Hapus Titik/Koma
                         master_list_df['NAMA_CLEAN'] = master_list_df[NAMA_KOLOM_NAMA_DAPODIK].astype(str).str.strip().str.upper()
                         master_list_df['NAMA_CLEAN'] = master_list_df['NAMA_CLEAN'].str.replace(r'[.,]', '', regex=True)
                         
-                        # Simpan Data Asli untuk nanti ditampilkan kembali, tapi gunakan NAMA_CLEAN untuk kunci unik
-                        # Kita gunakan Dictionary untuk mapping: (NPSN, NAMA_CLEAN) -> NAMA_ASLI
-                        master_dict = dict(zip(
-                            zip(master_list_df['NPSN'], master_list_df['NAMA_CLEAN']), 
-                            master_list_df[NAMA_KOLOM_NAMA_DAPODIK]
-                        ))
-                        master_set_keys = set(master_dict.keys())
-
-                        # B. Siapkan Trained List (Data Pelatihan)
+                        # B. Siapkan Trained List & Hitung Frekuensi (Data Pelatihan)
                         trained_list_df = df[['NPSN', 'NAMA_PESERTA']].copy()
-                        # Bersihkan NPSN Pelatihan sama persis dengan Dapodik
                         trained_list_df['NPSN'] = trained_list_df['NPSN'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-                        
-                        # Normalisasi Nama Pelatihan: Sama persis (Upper + Hapus titik/koma)
                         trained_list_df['NAMA_CLEAN'] = trained_list_df['NAMA_PESERTA'].astype(str).str.strip().str.upper()
                         trained_list_df['NAMA_CLEAN'] = trained_list_df['NAMA_CLEAN'].str.replace(r'[.,]', '', regex=True)
                         
-                        trained_set_keys = set(zip(trained_list_df['NPSN'], trained_list_df['NAMA_CLEAN']))
+                        # Menghitung frekuensi secara global berdasarkan NPSN dan NAMA
+                        frekuensi_df = trained_list_df.groupby(['NPSN', 'NAMA_CLEAN']).size().reset_index(name='JUMLAH_PELATIHAN')
+                        
+                        # C. Gabungkan Dapodik dengan Frekuensi (Left Join)
+                        final_data_df = master_list_df.merge(frekuensi_df, on=['NPSN', 'NAMA_CLEAN'], how='left')
+                        # Isi yang tidak pernah ikut (NaN) dengan 0
+                        final_data_df['JUMLAH_PELATIHAN'] = final_data_df['JUMLAH_PELATIHAN'].fillna(0).astype(int)
+                        
+                        # Buat label status teks agar mudah difilter di Excel
+                        def teks_prioritas(jml):
+                            if jml == 0: return "Belum Pernah (0x)"
+                            elif jml == 1: return "Pernah 1x"
+                            else: return f"Sudah Sering ({jml}x)"
+                        final_data_df['STATUS_UNDANGAN'] = final_data_df['JUMLAH_PELATIHAN'].apply(teks_prioritas)
 
-                        # C. Cari Selisih (Set Difference) menggunakan KUNCI YANG SUDAH DINORMALISASI
-                        untained_keys = master_set_keys - trained_set_keys
-                        
-                        # D. Kembalikan ke bentuk Data Asli
-                        # Kita ambil Nama Asli dari master_dict berdasarkan key yang belum pelatihan
-                        final_data_list = []
-                        for key in untained_keys:
-                            npsn_val, _ = key
-                            nama_asli_val = master_dict[key]
-                            final_data_list.append({'NPSN': npsn_val, 'Nama peserta': nama_asli_val})
-                        
-                        untained_df = pd.DataFrame(final_data_list)
-                        
-                        # --- PERBAIKAN LOGIKA END ---
-
-                        # 6. Add School Details (Sama seperti kode sebelumnya)
+                        # D. Tambahkan Detail Sekolah
                         NAMA_KOLOM_SEKOLAH_MASTER_RECO = 'NAMA_SEKOLAH' 
                         if NAMA_KOLOM_SEKOLAH_MASTER_RECO not in df_sekolah_sumber.columns:
                             if 'ASAL_SEKOLAH' in df_sekolah_sumber.columns:
@@ -678,39 +660,50 @@ def main_app():
                         existing_cols = [c for c in desired_cols if c in df_sekolah_sumber.columns]
                         
                         school_map_df = df_sekolah_sumber[existing_cols].copy()
-                        # Pastikan NPSN di map sekolah juga bersih
                         school_map_df['NPSN'] = school_map_df['NPSN'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
                         school_map_df = school_map_df.dropna(subset=['NPSN'])
                         school_map_df = school_map_df.drop_duplicates(subset=['NPSN'], keep='first')
                         
-                        final_df = untained_df.merge(school_map_df, on='NPSN', how='left')
+                        final_df = final_data_df.merge(school_map_df, on='NPSN', how='left')
 
-                        # 7. Format & Rename
+                        # E. Format & Rename Kolom sesuai Urutan yang Diminta
                         rename_dict = {
                             NAMA_KOLOM_SEKOLAH_MASTER_RECO: 'Sekolah',
                             'TIPE': 'Jenjang',
                             'STATUS': 'Status Sekolah',
                             'KECAMATAN': 'Kecamatan',
-                            'KABUPATEN': 'Sudin'
+                            'KABUPATEN': 'Sudin',
+                            NAMA_KOLOM_NAMA_DAPODIK: 'Nama Peserta',
+                            'JUMLAH_PELATIHAN': 'Frekuensi Ikut',
+                            'STATUS_UNDANGAN': 'Kategori'
                         }
                         final_df.rename(columns=rename_dict, inplace=True)
 
-                        required_output_cols = ['Sekolah', 'NPSN', 'Jenjang', 'Status Sekolah', 'Kecamatan', 'Sudin', 'Nama peserta']
+                        # Menyusun urutan kolom final
+                        required_output_cols = [
+                            'Sekolah', 'NPSN', 'Jenjang', 'Status Sekolah', 
+                            'Kecamatan', 'Sudin', 'Nama Peserta', 
+                            'Frekuensi Ikut', 'Kategori'
+                        ]
+                        
                         for col in required_output_cols:
                             if col not in final_df.columns:
                                 final_df[col] = pd.NA
                         
                         final_df = final_df[required_output_cols]
                         
-                        # 8. Create Excel in memory
+                        # Sortir data: Yang belum pernah (0) akan berada paling atas di Excel
+                        final_df = final_df.sort_values(by=['Frekuensi Ikut', 'Sekolah', 'Nama Peserta'])
+                        
+                        # F. Buat file Excel di Memori
                         output = io.BytesIO()
                         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                            final_df.to_excel(writer, index=False, sheet_name='Belum Pelatihan')
+                            final_df.to_excel(writer, index=False, sheet_name='Data Rekomendasi Undangan')
                         data_to_download = output.getvalue()
                         
                         st.session_state['download_data'] = data_to_download
                         st.session_state['download_ready'] = True
-                        st.success(f"Laporan siap! Ditemukan {len(final_df)} peserta. Klik tombol 'Unduh' di bawah.")
+                        st.success(f"✅ Laporan siap! Berhasil memproses {len(final_df)} data Dapodik lengkap dengan frekuensi pelatihannya. Klik tombol 'Unduh' di bawah.")
 
                     else:
                         st.error("Data Dapodik (data_dapodik_name) tidak dapat dimuat.")
@@ -720,9 +713,9 @@ def main_app():
         # Tombol download akan muncul di sini setelah data siap
         if st.session_state.get('download_ready', False):
             st.download_button(
-                label="✅ Unduh File Excel Sekarang",
+                label="📥 Unduh File Excel Sekarang",
                 data=st.session_state['download_data'],
-                file_name=f"rekomendasi_peserta_belum_pelatihan_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
+                file_name=f"Master_Rekomendasi_Peserta_{pd.Timestamp.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 on_click=lambda: st.session_state.update(download_ready=False) # Reset state
             )
