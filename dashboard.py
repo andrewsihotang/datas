@@ -788,6 +788,15 @@ def main_app():
 
         if selected_school_name != "-- Pilih Sekolah --":
             try:
+                school_name_list = ["-- Pilih Sekolah --"] + sorted(display_schools_df['ASAL_SEKOLAH'].unique())
+        selected_school_name = st.selectbox(
+            "Pilih Sekolah",
+            school_name_list,
+            key="reco_school_select"
+        )
+
+        if selected_school_name != "-- Pilih Sekolah --":
+            try:
                 selected_npsn = str(display_schools_df[
                     display_schools_df['ASAL_SEKOLAH'] == selected_school_name
                 ].iloc[0]['NPSN'])
@@ -856,7 +865,9 @@ def main_app():
                         
             except Exception as e:
                 st.error(f"Gagal memproses data rekomendasi. Pastikan sheet 'data_dapodik_name' ada. Error: {e}")
-
+        else:
+            # ---> INI ADALAH TAMBAHAN UI PETUNJUKNYA <---
+            st.info("👈 Silakan pilih nama sekolah pada menu 'Pilih Sekolah' di atas untuk memunculkan analisis prioritas undangan peserta.")
     # --- TAB 4: UPLOAD DATA ---
     with tab_upload:
         st.header("Upload Data Terbaru")
